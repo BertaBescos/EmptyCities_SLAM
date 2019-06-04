@@ -11,91 +11,16 @@ require 'image'
 require 'models'
 require 'cudnn'
 require 'criteria'
+require 'options'
+require 'visualize_save'
 
-opt = {
-	DATA_ROOT = '',				-- path to images (should have subfolders 'train', 'val', etc)
-	NSYNTH_DATA_ROOT = '',		-- path to non-synthetic images (should have subfolders 'train', 'val', etc)
-	batchSize = 1,          	-- # images in batch
-	loadSizeH = 550,			-- scale images height to this size
-	loadSizeW = 550,			-- scale images width to this size
-	loadSizeH_nsynth = 550,		-- scale non-synthetic images height to this size
-	loadSizeW_nsynth = 1100,	-- scale non-synthetic images width to this size
-	fineSizeH = 512,			-- then crop to this size
-	fineSizeW = 512,			-- then crop to this size
-	mask = 1,					-- set to 1 if CARLA images have mask (always on training)
-	target = 1,					-- set to 1 if CARLA images have target (always on training)
-	ngf = 64,					-- #  of gen filters in first conv layer
-	ndf = 64,					-- #  of discrim filters in first conv layer
-	input_nc = 3,				-- #  of input image channels (3 if input images are loaded in RGB)
-	output_nc = 3,				-- #  of output image channels (3 if target images are loaded in RGB)
-	mask_nc = 1,				-- #  of mask channels
-	input_gan_nc = 1,			-- #  of input image channels to the GAN architecture (1 if gray-scale)
-	output_gan_nc = 1,			-- #  of output image channels from the GAN architecture (1 if gray-scale)
-	niter = 200,				-- #  of iter at starting learning rate
-	lr = 0.0002,				-- initial learning rate for adam (generator and discriminator)
-	beta1 = 0.5,				-- momentum term of adam (generator and discriminator)
-	lr_SS = 0.0005,				-- initial learning rate for adam (semantic segmentation)
-	beta1_SS = 0.9,				-- momentum term of adam (semantic segmentation)
-	ntrain = math.huge,			-- #  of examples per epoch. math.huge for full dataset
-	data_aug = 0,				-- data augmentation (if set to 0 not used)
-	epoch_synth = 0,			-- train with real and synthetic data from this epoch on
-	pNonSynth = 0.10,			-- train with real and synthetic data in this ratio
-	display = 1,				-- display samples while training. 0 = false
-	display_id = 10,			-- display window id.
-	display_plot = 'errERFNet, errFeatures, errL1, val_errL1',	-- which loss values to plot over time.
-	gpu = 1,					-- gpu = 0 is CPU mode. gpu=X is GPU mode on GPU X
-	name = 'mGAN',				-- name of the experiment, should generally be passed on the command line
-	phase = 'train',			-- train, val, test, etc
-	nThreads = 2,				-- # threads for loading data
-	val_display_freq = 5000,	-- see validation output every val_display_freq iteration
-	save_epoch_freq = 25,		-- save a model every save_epoch_freq epochs (does not overwrite previously saved models)
-	save_latest_freq = 5000,	-- save the latest model every latest_freq sgd iterations (overwrites the previous latest model)
-	print_freq = 50,            -- print the debug information every print_freq iterations
-	display_freq = 100,         -- display the current results every display_freq iterations
-	save_display_freq = 10000,	-- save the current display of results every save_display_freq_iterations
-	continue_train = 0,			-- if continue training, load the latest model: 1: true, 0: false
-	epoch_ini = 1,				-- if continue training, at what epoch we start
-	counter = 0,				-- it keeps track of iterations
-	serial_batches = 0,			-- if 1, takes images in order to make batches, otherwise takes them randomly
-	serial_batch_iter = 1,		-- iter into serial image list
-	checkpoints_dir = './checkpoints',	-- models are saved here
-	ss_dir = './checkpoints/SemSeg/erfnet.net',
-	cudnn = 1,					-- set to 0 to not use cudnn
-	condition_GAN = 1,          -- set to 0 to use unconditional discriminator
-	condition_mG = 1,			-- set to 1 to input also the mask to the generator
-	condition_mD = 1,			-- set to 1 to input also the mask to the discriminator
-	condition_noise = 1,		-- set to 1 to use SRM noise features for the discriminator
-	noise_nc = 3,				-- number of SRM extracted features 
-	weight = 1,					-- set to 1 to compensate dynamic/static unbalanced data
-	which_model_netD = 'basic',	-- selects model to use for netD
-	which_model_netG = 'uresnet_512',	-- selects model to use for netG
-	n_layers_D = 0,				-- only used if which_model_netD=='n_layers'
-	norm = 'batch',				-- choose either batch or instance normalization
-	lambda = 100,				-- weight on L1 term in objective
-	lambdaSS = 100,				-- weight on SS term in objective
-	lambdaDetector = 10,		-- weight on features detector term in objective
-	lambdaOrientation = 0.1,	-- weight on features orientation term in objective
-	lambdaDescriptor = 1,		-- weight on features descriptors term in objective
-	lossDetector = 1,			-- set to 1 if features detector loss is used
-	lossOrientation = 1,		-- set to 1 if features orientation loss is used
-	lossDescriptor = 1,			-- set to 1 if features descriptors loss is used
-}
+---------------------------------------------------------------------------
+-- load training options
 
--- one-line argument parser. parses enviroment variables to override the defaults
+opt = load_train_options()
+
 for k,v in pairs(opt) do opt[k] = tonumber(os.getenv(k)) or os.getenv(k) or opt[k] end
 print(opt)
-
--- define helpful variables
-local input_nc = opt.input_nc
-local output_nc = opt.output_nc
-local mask_nc = opt.mask_nc
-local input_gan_nc = opt.input_gan_nc
-local output_gan_nc = opt.output_gan_nc
-local noise_nc = opt.noise_nc
-
-local idx_A = {1, input_nc}
-local idx_B = {input_nc + 1, input_nc + output_nc}
-local idx_C = {input_nc + output_nc + 1, input_nc + output_nc + mask_nc}
 
 if opt.display == 0 then opt.display = false end
 
@@ -104,11 +29,14 @@ print("Random Seed: " .. opt.manualSeed)
 torch.manualSeed(opt.manualSeed)
 torch.setdefaulttensortype('torch.FloatTensor')
 
+---------------------------------------------------------------------------
+
 -- create data loader for CARLA images (train and val)
 local synth_data_loader = paths.dofile('data/data.lua')
 print('#threads...' .. opt.nThreads)
 local synth_data = synth_data_loader.new(opt.nThreads, opt)
-print("CARLA Dataset Size: ", synth_data:size())
+synth_data_size = synth_data:size()
+print("CARLA Dataset Size: ", synth_data_size)
 opt.phase = 'val'
 local val_synth_data = synth_data_loader.new(opt.nThreads, opt)
 print("Validation CARLA Dataset Size: ", val_synth_data:size())
@@ -126,11 +54,11 @@ end
 
 opt.phase = 'train'
 
+---------------------------------------------------------------------------
+
 -- set batch/instance normalization
 set_normalization(opt.norm)
 
-local ndf = opt.ndf
-local ngf = opt.ngf
 local real_label = 1
 local fake_label = 0
 local synth_label = 1
@@ -144,6 +72,11 @@ if opt.NSYNTH_DATA_ROOT ~= '' then
 end
 
 ---------------------------------------------------------------------------
+
+-- define helpful variables
+local idx_A = {1, opt.input_nc}
+local idx_B = {opt.input_nc + 1, opt.input_nc + opt.output_nc}
+local idx_C = {opt.input_nc + opt.output_nc + 1, opt.input_nc + opt.output_nc + opt.mask_nc}
 
 optimStateG = {
 	learningRate = opt.lr,
@@ -162,26 +95,24 @@ end
 
 ----------------------------------------------------------------------------
 
-realRGB_A = torch.Tensor(opt.batchSize, input_nc, opt.fineSizeH, opt.fineSizeW)
-val_realRGB_A = torch.Tensor(opt.batchSize, input_nc, opt.fineSizeH, opt.fineSizeW)
-realRGB_B = torch.Tensor(opt.batchSize, output_nc, opt.fineSizeH, opt.fineSizeW)
-val_realRGB_B = torch.Tensor(opt.batchSize, output_nc, opt.fineSizeH, opt.fineSizeW)
-real_C = torch.Tensor(opt.batchSize, mask_nc, opt.fineSizeH, opt.fineSizeW) --bbescos
-val_real_C = torch.Tensor(opt.batchSize, mask_nc, opt.fineSizeH, opt.fineSizeW) --bbescos
-fake_B = torch.Tensor(opt.batchSize, output_gan_nc, opt.fineSizeH, opt.fineSizeW)
-val_fake_B = torch.Tensor(opt.batchSize, output_gan_nc, opt.fineSizeH, opt.fineSizeW)
-real_AC = torch.Tensor(opt.batchSize, input_gan_nc + mask_nc, opt.fineSizeH, opt.fineSizeW)
-val_real_AC = torch.Tensor(opt.batchSize, input_gan_nc + mask_nc, opt.fineSizeH, opt.fineSizeW)
-real_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
-val_real_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
-fake_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
-val_fake_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
+realRGB_A = torch.Tensor(opt.batchSize, opt.input_nc, opt.fineSizeH, opt.fineSizeW)
+val_realRGB_A = torch.Tensor(opt.batchSize, opt.input_nc, opt.fineSizeH, opt.fineSizeW)
+realRGB_B = torch.Tensor(opt.batchSize, opt.output_nc, opt.fineSizeH, opt.fineSizeW)
+val_realRGB_B = torch.Tensor(opt.batchSize, opt.output_nc, opt.fineSizeH, opt.fineSizeW)
+real_C = torch.Tensor(opt.batchSize, opt.mask_nc, opt.fineSizeH, opt.fineSizeW) --bbescos
+val_real_C = torch.Tensor(opt.batchSize, opt.mask_nc, opt.fineSizeH, opt.fineSizeW) --bbescos
+fake_B = torch.Tensor(opt.batchSize, opt.output_gan_nc, opt.fineSizeH, opt.fineSizeW)
+val_fake_B = torch.Tensor(opt.batchSize, opt.output_gan_nc, opt.fineSizeH, opt.fineSizeW)
+real_AC = torch.Tensor(opt.batchSize, opt.input_gan_nc + opt.mask_nc, opt.fineSizeH, opt.fineSizeW)
+val_real_AC = torch.Tensor(opt.batchSize, opt.input_gan_nc + opt.mask_nc, opt.fineSizeH, opt.fineSizeW)
+real_ABC = torch.Tensor(opt.batchSize, opt.input_gan_nc + opt.output_gan_nc*opt.condition_GAN + opt.mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
+val_real_ABC = torch.Tensor(opt.batchSize, opt.input_gan_nc + opt.output_gan_nc*opt.condition_GAN + opt.mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
+fake_ABC = torch.Tensor(opt.batchSize, opt.input_gan_nc + opt.output_gan_nc*opt.condition_GAN + opt.mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
+val_fake_ABC = torch.Tensor(opt.batchSize, opt.input_gan_nc + opt.output_gan_nc*opt.condition_GAN + opt.mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
 
-local errD, errG, errL1, errFeatures, errSS, errERFNet = 0, 0, 0, 0, 0, 0
-local val_errL1 = 0
-local epoch_tm = torch.Timer()
-local tm = torch.Timer()
-local data_tm = torch.Timer()
+epoch_tm = torch.Timer()
+tm = torch.Timer()
+data_tm = torch.Timer()
 
 ----------------------------------------------------------------------------
 
@@ -193,7 +124,7 @@ if opt.NSYNTH_DATA_ROOT ~= '' then
 	parametersSS, gradParametersSS = netSS:getParameters()
 end
 
-if opt.display then disp = require 'display' end
+load_visualize_options() 
 
 ----------------------------------------------------------------------------
 
@@ -462,7 +393,7 @@ local fGx = function(x)
 	errG = criterionGDiscriminator:forward(output, label)
 	df_do = criterionGDiscriminator:backward(output, label)
 
-	df_dg = netD:updateGradInput(fake_ABC, df_do):narrow(2, fake_ABC:size(2) - opt.condition_GAN*output_gan_nc - opt.condition_mD*mask_nc - opt.condition_noise*noise_nc + 1, output_gan_nc)	   
+	df_dg = netD:updateGradInput(fake_ABC, df_do):narrow(2, fake_ABC:size(2) - opt.condition_GAN*opt.output_gan_nc - opt.condition_mD*opt.mask_nc - opt.condition_noise*opt.noise_nc + 1, opt.output_gan_nc)	   
 
 	-- Features loss
 	local df_dg_Feat = torch.zeros(fake_B:size())
@@ -562,7 +493,7 @@ local fGx = function(x)
 			weights[mask:gt(0.5)] = valFeatures
 			weights[mask:le(0.5)] = valBackground
 		end
-		if output_gan_nc == 3 then
+		if opt.output_gan_nc == 3 then
 			weights = torch.cat(torch.cat(weights, weights, 2), weights, 2) 
 		end
 		criterionGenerator = nn.WeightedAbsCriterion(weights) --This is the L1 Loss
@@ -609,10 +540,10 @@ local fSSx = function(x)
 	local df_do = criterionDDiscriminator:backward(output, label)
 
 	local df_dp = netD:updateGradInput(fake_ABC, df_do):narrow(2,fake_ABC:size(2) - 
-		opt.condition_GAN*output_gan_nc - opt.condition_mD*mask_nc - opt.condition_noise*noise_nc + 1, output_gan_nc)
+		opt.condition_GAN*opt.output_gan_nc - opt.condition_mD*opt.mask_nc - opt.condition_noise*opt.noise_nc + 1, opt.output_gan_nc)
 
 	local df_dq = netG:updateGradInput(real_AC,df_dp):narrow(2, real_AC:size(2) - 
-		mask_nc + 1, mask_nc)
+		opt.mask_nc + 1, opt.mask_nc)
 
 	df_dg = netDynSS:updateGradInput(erfnet_C,df_dq)
 
@@ -632,41 +563,13 @@ local fSSx = function(x)
 end
 
 ----------------------------------------------------------------------------
-
 -- train
-local best_err = nil
+
 paths.mkdir(opt.checkpoints_dir)
 paths.mkdir(opt.checkpoints_dir .. '/' .. opt.name)
 
--- save opt
-file = torch.DiskFile(paths.concat(opt.checkpoints_dir, opt.name, 'opt.txt'), 'w')
-file:writeObject(opt)
-file:close()
+save_options()
 
--- parse diplay_plot string into table
-opt.display_plot = string.split(string.gsub(opt.display_plot, "%s+", ""), ",")
-for k, v in ipairs(opt.display_plot) do
-	 if not util.containsValue({"errG", "errD", "errL1", "errFeatures","errERFNet", "val_errG", "val_errD", "val_errL1", "val_errFeatures"}, v) then 
-		  error(string.format('bad display_plot value "%s"', v)) 
-	 end
-end
-
--- display plot config
-local plot_config = {
-  title = "Loss over time",
-  labels = {"epoch", unpack(opt.display_plot)},
-  ylabel = "loss",
-}
-
--- display plot vars
-local plot_data = {}
-local plot_win
-local aspect_ratio = opt.fineSizeW / opt.fineSizeH
-
-----------------------------------------------------------------------------
-
--- main loop
-local counter = opt.counter -- 0
 for epoch = opt.epoch_ini, opt.niter do
 	epoch_tm:reset()
 	for i = 1, math.min(synth_data:size(), opt.ntrain), opt.batchSize do
@@ -691,175 +594,18 @@ for epoch = opt.epoch_ini, opt.niter do
 		-- (3) Update SS network:
 		if synth_label == 0 then optim.adam(fSSx, parametersSS, optimStateSS) end
 
-		-- display
-		counter = counter + 1
-		if counter % opt.display_freq == 0 and opt.display then	
-			createRealFake()
-			local img_input = util.scale_batch(realGray_A:float(),100,100*aspect_ratio):add(1):div(2)
-			if input_gan_nc == 3 then
-				img_input = util.deprocess_batch(img_input)
-			end
-			disp.image(img_input, {win=opt.display_id, title=opt.name .. ' input'})
-			local mask_input = util.scale_batch(real_C:float(),100,100*aspect_ratio):add(1):div(2)
-			disp.image(mask_input, {win=opt.display_id+1, title=opt.name .. ' mask'})
-			local img_output = util.scale_batch(fake_B:float(),100,100*aspect_ratio):add(1):div(2)
-			if output_gan_nc == 3 then
-				img_input = util.deprocess_batch(img_output)
-			end
-			disp.image(img_output, {win=opt.display_id+2, title=opt.name .. ' output'})
-			local img_target = util.scale_batch(realGray_B:float(),100,100*aspect_ratio):add(1):div(2)
-			if output_gan_nc == 3 then
-				img_target = util.deprocess_batch(img_target)
-			end
-			disp.image(img_target, {win=opt.display_id+3, title=opt.name .. ' target'})
-			if opt.lossDetector == 1 then
-				local output_map = feat_fake_B[{{},{1},{},{}}]:clone()
-				output_map[output_map:gt(0.5)] = 1
-				output_map[output_map:le(0.5)] = 0
-				local img_output_features = util.scale_batch(output_map:float(),100,100*aspect_ratio)
-				disp.image(img_output_features, {win=opt.display_id+4, title=opt.name .. ' output_features'})
-				local target_map = feat_real_B[{{},{1},{},{}}]:clone()
-				target_map[target_map:gt(0.5)] = 1
-				target_map[target_map:le(0.5)] = 0
-				local img_target_features = util.scale_batch(target_map:float(),100,100*aspect_ratio)
-				disp.image(img_target_features, {win=opt.display_id+5, title=opt.name .. ' label_features'})
-			end
-			if opt.lossOrientation == 1 then
-				local img_output_features = util.scale_batch(feat_fake_B[{{},{opt.lossDetector + 1},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_output_features, {win=opt.display_id+6, title=opt.name .. ' output_m10'})
-				local img_target_features = util.scale_batch(feat_real_B[{{},{opt.lossDetector + 1},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_target_features, {win=opt.display_id+7, title=opt.name .. ' label_m10'})
-				local img_output_features = util.scale_batch(feat_fake_B[{{},{opt.lossDetector + 2},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_output_features, {win=opt.display_id+8, title=opt.name .. ' output_m00'})
-				local img_target_features = util.scale_batch(feat_real_B[{{},{opt.lossDetector + 2},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_target_features, {win=opt.display_id+9, title=opt.name .. ' label_m00'})
-				local img_output_features = util.scale_batch(feat_fake_B[{{},{opt.lossDetector + 3},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_output_features, {win=opt.display_id+10, title=opt.name .. ' output_m01'})
-				local img_target_features = util.scale_batch(feat_real_B[{{},{opt.lossDetector + 3},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_target_features, {win=opt.display_id+11, title=opt.name .. ' label_m01'})
-			end
-			if opt.lossDescriptor == 1 then
-				local img_output_features = util.scale_batch(feat_fake_B[{{},{opt.lossDetector + 3*opt.lossOrientation + 1},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_output_features, {win=opt.display_id+12, title=opt.name .. ' output_pair1'})
-				local img_target_features = util.scale_batch(feat_real_B[{{},{opt.lossDetector + 3*opt.lossOrientation + 1},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_target_features, {win=opt.display_id+13, title=opt.name .. ' label_pair1'})
-				local img_output_features = util.scale_batch(feat_fake_B[{{},{opt.lossDetector + 3*opt.lossOrientation + 2},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_output_features, {win=opt.display_id+14, title=opt.name .. ' output_pair2'})
-				local img_target_features = util.scale_batch(feat_real_B[{{},{opt.lossDetector + 3*opt.lossOrientation + 2},{},{}}]:float(),100,100*aspect_ratio)
-				disp.image(img_target_features, {win=opt.display_id+15, title=opt.name .. ' label_pair2'})
-			end
-			if synth_label == 0 then
-				local dyn_mask_output = util.scale_batch(fake_C:float(),100,100*aspect_ratio):add(1):div(2)
-				disp.image(dyn_mask_output, {win=opt.display_id+17, title=opt.name .. ' dynamic_mask'})
-			end
-		end
-
-		-- write display visualization to disk
-		-- runs on the first batchSize images in the opt.phase set
-		if counter % opt.save_display_freq == 0 and opt.display then
-			local serial_batches=opt.serial_batches
-			opt.serial_batches=1
-			opt.serial_batch_iter=1
-			
-			local image_out = nil
-			local N_save_display = 10 
-			local N_save_iter = torch.max(torch.Tensor({1, torch.floor(N_save_display/opt.batchSize)}))
-			for i3=1, N_save_iter do
-				createRealFake()
-				print('save to the disk')
-				for i2=1, fake_B:size(1) do
-					if image_out==nil then
-						if input_gan_nc == 1 then 
-							image_out = torch.cat(realGray_A[i2]:float():add(1):div(2), fake_B[i2]:float():add(1):div(2), 3)
-						else
-							image_out = torch.cat(util.deprocess(realGray_A[i2]:float()),util.deprocess(fake_B[i2]:float()),3)
-						end
-					else
-						if input_gan_nc == 1 then
-							image_out = torch.cat(image_out, torch.cat(realGray_A[i2]:float():add(1):div(2), fake_B[i2]:float():add(1):div(2),3), 2)
-						else
-							image_out = torch.cat(image_out, torch.cat(util.deprocess(realGray_A[i2]:float()),util.deprocess(fake_B[i2]:float()),3), 2)
-						end
-					end
-				end
-			end
-			image.save(paths.concat(opt.checkpoints_dir,  opt.name , counter .. '_train_res.png'), image_out)
-			opt.serial_batches=serial_batches
-		end
+		opt.counter = opt.counter + 1
 		
-		-- validation display
-		if (counter % opt.val_display_freq == 0 or counter == 1) and opt.display then
-			val_createRealFake()
-			val_errL1 = criterionGenerator:forward(val_fake_B, val_realGray_B)
-			local img_input = util.scale_batch(val_realGray_A:float(),100,100*aspect_ratio):add(1):div(2)
-			if input_gan_nc == 3 then
-				img_input = util.deprocess_batch(img_input)
-			end
-			disp.image(img_input, {win=opt.display_id+20, title=opt.name .. ' val_input'})
-			local mask_input = util.scale_batch(val_real_C:float(),100,100*aspect_ratio):add(1):div(2)
-			disp.image(mask_input, {win=opt.display_id+21, title=opt.name .. ' val_mask'})
-			local img_output = util.scale_batch(val_fake_B:float(),100,100*aspect_ratio):add(1):div(2)
-			if output_gan_nc == 3 then
-				img_output = util.deprocess_batch(img_output)
-			end
-			disp.image(img_output, {win=opt.display_id+22, title=opt.name .. ' val_output'})
-			local img_target = util.scale_batch(val_realGray_B:float(),100,100*aspect_ratio):add(1):div(2)
-			if output_gan_nc == 3 then
-				img_target = util.deprocess_batch(img_target)
-			end
-			disp.image(img_target, {win=opt.display_id+23, title=opt.name .. ' val_target'})
-			if opt.lossDetector == 1 then
-				local val_output_map = val_feat_fake_B[{{},{1},{},{}}]:clone()
-				val_output_map[val_output_map:gt(0.5)] = 1
-				val_output_map[val_output_map:le(0.5)] = 0
-				local img_output_features = util.scale_batch(val_output_map:float(),100,100)
-				disp.image(img_output_features, {win=opt.display_id+24, title=opt.name .. ' val_output_features'})
-				local val_target_map = val_feat_real_B[{{},{1},{},{}}]:clone()
-				val_target_map[val_target_map:gt(0.5)] = 1
-				val_target_map[val_target_map:le(0.5)] = 0
-				local img_target_features = util.scale_batch(val_target_map:float(),100,100)
-				disp.image(img_target_features, {win=opt.display_id+25, title=opt.name .. ' val_target_features'})
-			end
-			if synth_label == 0 then
-				local dyn_mask_output = util.scale_batch(val_fake_C:float(),100,100*aspect_ratio):add(1):div(2)
-				disp.image(dyn_mask_output, {win=opt.display_id+27, title=opt.name .. ' val_dynamic_mask'})
-			end
-		end
+		display()
 
-		-- logging and display plot
-		if counter % opt.print_freq == 0 then
-			local loss = {errG=errG and errG or -1, errD=errD and errD or -1, errL1=errL1 and errL1 or -1, errFeatures=errFeatures and errFeatures or -1, errERFNet=errERFNet and errERFNet or -1, val_errL1=val_errL1 and val_errL1 or -1}
-			local curItInBatch = ((i-1) / opt.batchSize)
-			local totalItInBatch = math.floor(math.min(synth_data:size(), opt.ntrain) / opt.batchSize)
-			print(('Epoch: [%d][%8d / %8d]\t Time: %.3f  DataTime: %.3f  '
-					.. '  Err_G: %.4f  Err_D: %.4f  ErrL1: %.4f ErrFeatures: %.4f'):format(
-					 epoch, curItInBatch, totalItInBatch,
-					 tm:time().real / opt.batchSize, data_tm:time().real / opt.batchSize,
-					 errG, errD, errL1, errFeatures))
-			local plot_vals = { epoch + curItInBatch / totalItInBatch }
-			for k, v in ipairs(opt.display_plot) do
-				if loss[v] ~= nil then
-				   plot_vals[#plot_vals + 1] = loss[v]
-				end
-			end
-			
-			-- update display plot
-			if opt.display then
-				table.insert(plot_data, plot_vals)
-				plot_config.win = plot_win
-				plot_win = disp.plot(plot_data, plot_config)
-			end
-		end
+		save_display()
 
-		-- save latest model
-		if counter % opt.save_latest_freq == 0 then
-			print(('saving the latest model (epoch %d, iters %d)'):format(epoch, counter))
-			torch.save(paths.concat(opt.checkpoints_dir, opt.name, 'latest_net_G.t7'), netG:clearState())
-			torch.save(paths.concat(opt.checkpoints_dir, opt.name, 'latest_net_D.t7'), netD:clearState())
-			if opt.NSYNTH_DATA_ROOT ~= '' then
-				torch.save(paths.concat(opt.checkpoints_dir, opt.name, 'latest_net_SS.net'), netSS:clearState())
-			end
-		end
+		val_display()
+
+		display_plot(epoch, i)
+
+		save_latest_model()
+
 	end
 
 	parametersD, gradParametersD = nil, nil -- nil them to avoid spiking memory
@@ -870,13 +616,7 @@ for epoch = opt.epoch_ini, opt.niter do
 	
 	print('..........................parameters to nil.......................')
 
-	if epoch % opt.save_epoch_freq == 0 then
-		torch.save(paths.concat(opt.checkpoints_dir, opt.name,  epoch .. '_net_G.t7'), netG:clearState())
-		torch.save(paths.concat(opt.checkpoints_dir, opt.name, epoch .. '_net_D.t7'), netD:clearState())
-		if opt.NSYNTH_DATA_ROOT ~= '' then
-			torch.save(paths.concat(opt.checkpoints_dir, opt.name, epoch .. '_net_SS.net'), netSS:clearState())
-		end
-	end
+	save_epoch_model(epoch)
 
 	print(('End of epoch %d / %d \t Time Taken: %.3f'):format(epoch, opt.niter, epoch_tm:time().real))
 	parametersD, gradParametersD = netD:getParameters() -- reflatten the params and get them

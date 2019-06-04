@@ -78,7 +78,7 @@ function WeightedBCECriterion:updateOutput(input, target)
 
    	local output = nil
    	if weights ~= nil then
-		output = (torch.cmul(weights, - torch.cmul(target, input:clone():clamp(0.000001, 0.999999):log()) - torch.cmul((1 - target), (1 - input:clone():clamp(0.000001, 0.999999)):log())):sum()
+		output = torch.cmul(weights, - torch.cmul(target, input:clone():clamp(0.000001, 0.999999):log()) - torch.cmul((1 - target), (1 - input:clone():clamp(0.000001, 0.999999)):log())):sum()
 	else
 		output = (- torch.cmul(target, input:clone():clamp(0.000001, 0.999999):log()) - torch.cmul((1 - target), (1 - input:clone():clamp(0.000001, 0.999999)):log())):sum()
 	end
