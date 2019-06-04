@@ -569,6 +569,7 @@ function defineD_n_layers(input_nc, output_nc, ndf, n_layers)
 	end
 end
 
+-- ORB pairs descriptor pattern
 local pattern = torch.Tensor({{8,-3, 9,5},--mean (0), correlation (0){
 	{4,2, 7,-12},--mean (1.12461e-05), correlation (0.0437584){
 	{-11,9, -8,2},--mean (3.37382e-05), correlation (0.0617409){
@@ -826,6 +827,7 @@ local pattern = torch.Tensor({{8,-3, 9,5},--mean (0), correlation (0){
 	{7,0, 12,-2},--mean (0.127002), correlation (0.537452){
 	{-1,-6, 0,-11}})--mean (0.127148), correlation (0.547401)
 
+-- this function defines the FAST detection kernels for scale = 1.2
 function FASTKernels()
 
     local kernel_stack = torch.Tensor(16, 1, 7, 7)
@@ -1105,6 +1107,7 @@ function FASTKernels()
     return kernel_stack
 end
 
+-- this function defines the kernels used for extracting the patch intensity moments
 function create_orientation_kernels(kernel_size)
 
 	-- function to compute the kenrles for moments of a patch
@@ -1133,6 +1136,7 @@ function create_orientation_kernels(kernel_size)
 	return kernel_stack
 end
 
+-- this function creates a kernel for each pixel pair in the ORB pattern
 function create_pattern_kernels(pattern, kernel_size)
 	-- given a pattern it creates the corresponding kernels for binary test
 	
@@ -1149,6 +1153,7 @@ function create_pattern_kernels(pattern, kernel_size)
 	return kernel_stack
 end
 
+-- this function defines the network to extract the image FAST features
 function define_netFDetector(stride)
 
 	local kernel_size = 7
@@ -1175,6 +1180,7 @@ function define_netFDetector(stride)
 	return net
 end
 
+-- this function defines the network to extract the image patches intensity moments
 function define_netFOrientation(stride)
 
 	local kernel_size = 29
@@ -1190,6 +1196,7 @@ function define_netFOrientation(stride)
 	return net
 end
 
+-- this function defines the network to extract the image patches ORB descriptors
 function define_netFDescriptor(stride)
 
 	local kernel_size = 29
@@ -1207,6 +1214,7 @@ function define_netFDescriptor(stride)
 	return net
 end
 
+-- this function parallelizes the 3 previous networks
 function define_netFeatures(lossDetector, lossOrientation, lossDescriptor, stride)
 
 	local netFeatures = nn.DepthConcat(2)
@@ -1238,7 +1246,7 @@ function define_netFeatures(lossDetector, lossOrientation, lossDescriptor, strid
 	return netFeatures
 end
 
-function computeFeaturesDetector(stride, input)
+--[[function computeFeaturesDetector(stride, input)
 
 	local netFDetector = define_netFDetector(stride)
 	
@@ -1252,9 +1260,9 @@ function computeFeaturesDetector(stride, input)
     temp[temp:le(0.5)] = 0
 
     return temp
-end
+end]]--
 
-function computeFeaturesOrientation(stride, input)
+--[[function computeFeaturesOrientation(stride, input)
 
     local netFOrientation = define_netFOrientation(5)
 
@@ -1265,9 +1273,9 @@ function computeFeaturesOrientation(stride, input)
     local featuresOrientation = netFOrientation:forward(input)
 
     return featuresOrientation
-end
+end]]--
 
-function computeFeaturesDescriptor(stride, input)
+--[[function computeFeaturesDescriptor(stride, input)
 
     local netFDescriptor = define_netFDescriptor(stride)
 
@@ -1281,9 +1289,9 @@ function computeFeaturesDescriptor(stride, input)
     featuresDescriptor[featuresDescriptor:le(0.5)] = 0
 
     return featuresDescriptor
-end
+end]]--
 
-function computeFeatures(lossDetector, lossOrientation, lossDescriptor, stride, input)
+--[[function computeFeatures(lossDetector, lossOrientation, lossDescriptor, stride, input)
     
     local features = nil
 
@@ -1308,8 +1316,9 @@ function computeFeatures(lossDetector, lossOrientation, lossDescriptor, stride, 
     end
 
     return features
-end
+end]]--
 
+-- this function defines the weights for the detection loss
 function computeDetectorWeights(lossDetector, lossOrientation, lossDescriptor, inputFeatures, targetFeatures)
 
     local tFeat = targetFeatures[{{},{1},{},{}}]:float()
@@ -1327,6 +1336,7 @@ function computeDetectorWeights(lossDetector, lossOrientation, lossDescriptor, i
     return weights
 end
 
+-- this function defines the weights for the descriptors loss
 function computeDescriptorWeights(lossDetector, lossOrientation, lossDescriptor, inputFeatures, targetFeatures)
     
     local tFeat = targetFeatures[{{},{lossDetector + lossOrientation*3 + 1, lossDetector + lossOrientation*3 + 256},{},{}}]:float()
@@ -1340,6 +1350,7 @@ function computeDescriptorWeights(lossDetector, lossOrientation, lossDescriptor,
     return weights
 end
 
+-- this function defines the weights for the orientation loss
 function computeOrientationWeights(lossDetector, lossOrientation, lossDescriptor, inputFeatures, targetFeatures)
     
     local output_map = inputFeatures[{{},{1},{},{}}]:clone()
@@ -1355,6 +1366,7 @@ function computeOrientationWeights(lossDetector, lossOrientation, lossDescriptor
     return weights
 end
 
+-- this function defines the network to extract the SRM noise features
 function define_netNoise(output_gan_nc)
 
 	local SRM1 = torch.Tensor({{0, 0, 0, 0, 0}, {0, -1, 2, -1, 0}, {0, 2, -4, 2, 0}, {0, -1, 2, -1, 0}, {0, 0, 0, 0, 0}}):mul(0.25)
@@ -1385,6 +1397,7 @@ function define_netNoise(output_gan_nc)
 	return net
 end
 
+-- this function defines the network to convert a RGB image into gray-scale
 function define_RGB2Gray()
 
 	local  kernel = torch.Tensor(1, 3, 1, 1)
