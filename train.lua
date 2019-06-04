@@ -450,9 +450,9 @@ local fGx = function(x)
 	end
 
 	if opt.weight == 1 then
-		criterionGDiscriminator = nn.BCECriterion(weightsDiscriminator)
+		criterionGDiscriminator = nn.WeightedBCECriterion(weightsDiscriminator)
 	else
-		criterionGDiscriminator = nn.BCECriterion()
+		criterionGDiscriminator = nn.WeightedBCECriterion()
 	end
 	
 	if opt.gpu > 0 then
@@ -480,7 +480,7 @@ local fGx = function(x)
 			if opt.gpu == 1 then
 				weightsDetector = weightsDetector:cuda()
 			end
-			criterionDetector = nn.BCECriterion(weightsDetector) --This is the criterion for the features detection
+			criterionDetector = nn.WeightedBCECriterion(weightsDetector) --This is the criterion for the features detection
 			if opt.gpu > 0 then
 				criterionDetector:cuda()
 			end

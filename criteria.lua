@@ -58,6 +58,64 @@ function WeightedAbsCriterion:updateGradInput(input, target)
 	return self.gradInput
 end
 
+local WeightedBCECriterion, parent = torch.class('nn.WeightedBCECriterion', 'nn.Criterion')
+
+function WeightedBCECriterion:__init(weights, sizeAverage)
+	parent.__init(self)
+	if sizeAverage ~= nil then
+		self.sizeAverage = sizeAverage
+	else
+		self.sizeAverage = true
+ 	end
+	if weights ~= nil then
+		self.weights = weights
+	end
+end
+
+function WeightedBCECriterion:updateOutput(input, target)
+   
+   	local weights = self.weights
+
+   	local output = nil
+   	if weights ~= nil then
+		output = (torch.cmul(weights, - torch.cmul(target, input:clone():clamp(0.000001, 0.999999):log()) - torch.cmul((1 - target), (1 - input:clone():clamp(0.000001, 0.999999)):log())):sum()
+	else
+		output = (- torch.cmul(target, input:clone():clamp(0.000001, 0.999999):log()) - torch.cmul((1 - target), (1 - input:clone():clamp(0.000001, 0.999999)):log())):sum()
+	end
+
+	if self.sizeAverage then
+		output = output / input:numel()
+	end
+
+	self.output = output
+   
+	return self.output
+end
+
+function WeightedBCECriterion:updateGradInput(input, target)
+
+	self.gradInput:resizeAs(input)
+	local temp = -torch.cdiv(target, input) + torch.cdiv((1 - target), (1 - input))
+	temp[temp:ne(temp)] = 1
+
+	local weights = self.weights
+
+	local output = nil
+   	if weights ~= nil then
+		output = torch.cmul(weights, temp)
+	else
+		output = temp:clone()
+	end
+
+	if self.sizeAverage then
+		output = output / input:numel()
+	end
+
+	self.gradInput = output
+
+	return self.gradInput
+end
+
 function WeightedCECriterion()
 	local classes = {'Unlabeled', 'Road', 'Sidewalk', 'Building', 'Wall', 'Fence','Pole', 'TrafficLight', 'TrafficSign', 'Vegetation', 'Terrain', 'Sky', 'Person', 'Rider', 'Car', 'Truck', 'Bus', 'Train', 'Motorcycle', 'Bicycle'}
 	local classWeights = torch.Tensor(#classes)
