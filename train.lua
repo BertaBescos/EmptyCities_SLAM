@@ -1,6 +1,6 @@
--- usage example: DATA_ROOT=/path/to/data/ which_direction=BtoA name=expt1 th train.lua 
+-- usage example: DATA_ROOT=/path/to/data/ name=expt1 th train.lua 
 --
--- code derived from https://github.com/soumith/dcgan.torch
+-- code derived from https://github.com/phillipi/pix2pix
 --
 
 require 'torch'
@@ -10,76 +10,75 @@ util = paths.dofile('util/util.lua')
 require 'image'
 require 'models'
 require 'cudnn'
---require 'imgraph'
 require 'criteria'
 
 opt = {
-	DATA_ROOT = '',			-- path to images (should have subfolders 'train', 'val', etc)
-	NSYNTH_DATA_ROOT = '',	-- path to non synthetic images (should have subfolders 'train', 'val', etc)
-	batchSize = 1,          -- # images in batch
-	loadSizeH = 256,--550,--256,         -- scale images to this size
-	loadSizeW = 768,--550,--768,         -- scale images to this size
-	loadSizeH_nsynth = 280,--550, --TODO
-	loadSizeW_nsynth = 928,--1100, --TODO
-	fineSizeH = 256,--512,--256,         -- then crop to this size
-	fineSizeW = 768,--512,--768,         -- then crop to this size
-	mask = 1,				-- set to 1 if CARLA images have mask (always on training)
-	target = 1,				-- set to 1 if CARLA images have target (always on training)
-	ngf = 64,               -- #  of gen filters in first conv layer
-	ndf = 64,               -- #  of discrim filters in first conv layer
-	input_nc = 3,           -- #  of input image channels
-	output_nc = 3,          -- #  of output image channels
-	mask_nc = 1,			-- #  of mask channels
-	input_gan_nc = 1,		-- #  of input image channels to the GAN architecture
-	output_gan_nc = 1,		-- #  of output image channels from the GAN architecture
-	niter = 200,            -- #  of iter at starting learning rate
-	lr = 0.0002,            -- initial learning rate for adam
-	beta1 = 0.5,            -- momentum term of adam
-	lr_SS = 0.0005,
-	beta1_SS = 0.9,
-	ntrain = math.huge,     -- #  of examples per epoch. math.huge for full dataset
-	data_aug = 0,	   		-- data augmentation
-	epoch_synth = 0,	   	-- train with real and synthetic data from this epoch on
-	pNonSynth = 0.10,	   	-- train with real and synthetic data with this proportion
-	display = 1,            -- display samples while training. 0 = false
-	display_id = 10,        -- display window id.
-	display_plot = 'errERFNet, errFeatures, errL1, val_errL1', -- which loss values to plot over time. Accepted values include a comma seperated list of: errL1, errG, and errD
-	gpu = 1,				-- gpu = 0 is CPU mode. gpu=X is GPU mode on GPU X
-	name = 'mGAN',			-- name of the experiment, should generally be passed on the command line
-	phase = 'train',		-- train, val, test, nsynth, etc
-	nThreads = 2,			-- # threads for loading data
-	val_display_freq = 5000,		-- see validation output every val_display_freq iteration
-	save_epoch_freq = 25,	-- save a model every save_epoch_freq epochs (does not overwrite previously saved models)
+	DATA_ROOT = '',				-- path to images (should have subfolders 'train', 'val', etc)
+	NSYNTH_DATA_ROOT = '',		-- path to non-synthetic images (should have subfolders 'train', 'val', etc)
+	batchSize = 1,          	-- # images in batch
+	loadSizeH = 550,			-- scale images height to this size
+	loadSizeW = 550,			-- scale images width to this size
+	loadSizeH_nsynth = 550,		-- scale non-synthetic images height to this size
+	loadSizeW_nsynth = 1100,	-- scale non-synthetic images width to this size
+	fineSizeH = 512,			-- then crop to this size
+	fineSizeW = 512,			-- then crop to this size
+	mask = 1,					-- set to 1 if CARLA images have mask (always on training)
+	target = 1,					-- set to 1 if CARLA images have target (always on training)
+	ngf = 64,					-- #  of gen filters in first conv layer
+	ndf = 64,					-- #  of discrim filters in first conv layer
+	input_nc = 3,				-- #  of input image channels (3 if input images are loaded in RGB)
+	output_nc = 3,				-- #  of output image channels (3 if target images are loaded in RGB)
+	mask_nc = 1,				-- #  of mask channels
+	input_gan_nc = 1,			-- #  of input image channels to the GAN architecture (1 if gray-scale)
+	output_gan_nc = 1,			-- #  of output image channels from the GAN architecture (1 if gray-scale)
+	niter = 200,				-- #  of iter at starting learning rate
+	lr = 0.0002,				-- initial learning rate for adam (generator and discriminator)
+	beta1 = 0.5,				-- momentum term of adam (generator and discriminator)
+	lr_SS = 0.0005,				-- initial learning rate for adam (semantic segmentation)
+	beta1_SS = 0.9,				-- momentum term of adam (semantic segmentation)
+	ntrain = math.huge,			-- #  of examples per epoch. math.huge for full dataset
+	data_aug = 0,				-- data augmentation (if set to 0 not used)
+	epoch_synth = 0,			-- train with real and synthetic data from this epoch on
+	pNonSynth = 0.10,			-- train with real and synthetic data in this ratio
+	display = 1,				-- display samples while training. 0 = false
+	display_id = 10,			-- display window id.
+	display_plot = 'errERFNet, errFeatures, errL1, val_errL1',	-- which loss values to plot over time.
+	gpu = 1,					-- gpu = 0 is CPU mode. gpu=X is GPU mode on GPU X
+	name = 'mGAN',				-- name of the experiment, should generally be passed on the command line
+	phase = 'train',			-- train, val, test, etc
+	nThreads = 2,				-- # threads for loading data
+	val_display_freq = 5000,	-- see validation output every val_display_freq iteration
+	save_epoch_freq = 25,		-- save a model every save_epoch_freq epochs (does not overwrite previously saved models)
 	save_latest_freq = 5000,	-- save the latest model every latest_freq sgd iterations (overwrites the previous latest model)
 	print_freq = 50,            -- print the debug information every print_freq iterations
 	display_freq = 100,         -- display the current results every display_freq iterations
 	save_display_freq = 10000,	-- save the current display of results every save_display_freq_iterations
-	continue_train=0,			-- if continue training, load the latest model: 1: true, 0: false
+	continue_train = 0,			-- if continue training, load the latest model: 1: true, 0: false
 	epoch_ini = 1,				-- if continue training, at what epoch we start
-	counter = 0,
+	counter = 0,				-- it keeps track of iterations
 	serial_batches = 0,			-- if 1, takes images in order to make batches, otherwise takes them randomly
 	serial_batch_iter = 1,		-- iter into serial image list
 	checkpoints_dir = './checkpoints',	-- models are saved here
 	ss_dir = './checkpoints/SemSeg/erfnet.net',
-	cudnn = 1,							-- set to 0 to not use cudnn
-	condition_GAN = 1,                 	-- set to 0 to use unconditional discriminator
-	condition_mG = 1,					-- set to 1 to input also the mask to the generator
-	condition_mD = 1,					-- set to 1 to input also the mask to the discriminator
-	condition_noise = 1,
-	noise_nc = 3,
-	weight = 1,							-- if we apply weights to discriminator and generator loss for L1 and BCE
-	which_model_netD = 'basic',			-- selects model to use for netD
-	which_model_netG = 'uresnet_512',			-- selects model to use for netG
-	n_layers_D = 0,						-- only used if which_model_netD=='n_layers'
-	norm = 'batch',						-- choose either batch or instance normalization
-	lambda = 100,						-- weight on L1 term in objective
-	lambdaSS = 100,						-- weight on SS term in objective
-	lambdaDetector = 10,				-- weight on Features term in objective 10 for detector, 0.1 for orientation and 1 for descriptor
-	lambdaOrientation = 0.1,
-	lambdaDescriptor = 1,
-	lossDetector = 1,
-	lossOrientation = 0,
-	lossDescriptor = 0,
+	cudnn = 1,					-- set to 0 to not use cudnn
+	condition_GAN = 1,          -- set to 0 to use unconditional discriminator
+	condition_mG = 1,			-- set to 1 to input also the mask to the generator
+	condition_mD = 1,			-- set to 1 to input also the mask to the discriminator
+	condition_noise = 1,		-- set to 1 to use SRM noise features for the discriminator
+	noise_nc = 3,				-- number of SRM extracted features 
+	weight = 1,					-- set to 1 to compensate dynamic/static unbalanced data
+	which_model_netD = 'basic',	-- selects model to use for netD
+	which_model_netG = 'uresnet_512',	-- selects model to use for netG
+	n_layers_D = 0,				-- only used if which_model_netD=='n_layers'
+	norm = 'batch',				-- choose either batch or instance normalization
+	lambda = 100,				-- weight on L1 term in objective
+	lambdaSS = 100,				-- weight on SS term in objective
+	lambdaDetector = 10,		-- weight on features detector term in objective
+	lambdaOrientation = 0.1,	-- weight on features orientation term in objective
+	lambdaDescriptor = 1,		-- weight on features descriptors term in objective
+	lossDetector = 1,			-- set to 1 if features detector loss is used
+	lossOrientation = 1,		-- set to 1 if features orientation loss is used
+	lossDescriptor = 1,			-- set to 1 if features descriptors loss is used
 }
 
 -- one-line argument parser. parses enviroment variables to override the defaults
@@ -901,12 +900,12 @@ for epoch = opt.epoch_ini, opt.niter do
 			if opt.lossDetector == 1 then
 				local output_map = feat_fake_B[{{},{1},{},{}}]:clone()
 				output_map[output_map:gt(0.5)] = 1
-    			output_map[output_map:le(0.5)] = 0
+				output_map[output_map:le(0.5)] = 0
 				local img_output_features = util.scale_batch(output_map:float(),100,100*aspect_ratio)
 				disp.image(img_output_features, {win=opt.display_id+4, title=opt.name .. ' output_features'})
 				local target_map = feat_real_B[{{},{1},{},{}}]:clone()
 				target_map[target_map:gt(0.5)] = 1
-    			target_map[target_map:le(0.5)] = 0
+				target_map[target_map:le(0.5)] = 0
 				local img_target_features = util.scale_batch(target_map:float(),100,100*aspect_ratio)
 				disp.image(img_target_features, {win=opt.display_id+5, title=opt.name .. ' label_features'})
 			end
@@ -997,12 +996,12 @@ for epoch = opt.epoch_ini, opt.niter do
 			if opt.lossDetector == 1 then
 				local val_output_map = val_feat_fake_B[{{},{1},{},{}}]:clone()
 				val_output_map[val_output_map:gt(0.5)] = 1
-    			val_output_map[val_output_map:le(0.5)] = 0
+				val_output_map[val_output_map:le(0.5)] = 0
 				local img_output_features = util.scale_batch(val_output_map:float(),100,100)
 				disp.image(img_output_features, {win=opt.display_id+24, title=opt.name .. ' val_output_features'})
 				local val_target_map = val_feat_real_B[{{},{1},{},{}}]:clone()
 				val_target_map[val_target_map:gt(0.5)] = 1
-    			val_target_map[val_target_map:le(0.5)] = 0
+				val_target_map[val_target_map:le(0.5)] = 0
 				local img_target_features = util.scale_batch(val_target_map:float(),100,100)
 				disp.image(img_target_features, {win=opt.display_id+25, title=opt.name .. ' val_target_features'})
 			end
