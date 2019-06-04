@@ -47,6 +47,118 @@ function defineG(input_nc, output_nc, ngf)
 	return netG
 end
 
+-- function to load discriminator D
+function defineD(input_nc, output_nc, ndf)
+	local netD = nil
+	if opt.condition_GAN == 1 or opt.condition_mD == 1 then
+		input_nc_tmp = input_nc
+	else
+		input_nc_tmp = 0 -- only penalizes structure in output channels
+	end
+	if opt.which_model_netD == "basic" then 
+		netD = defineD_basic(input_nc_tmp, output_nc, ndf)
+	elseif opt.which_model_netD == "n_layers" then 
+		netD = defineD_n_layers(input_nc_tmp, output_nc, ndf, opt.n_layers_D)  
+	else 
+		error("unsupported netD model")
+	end
+	netD:apply(weights_init)
+	return netD
+end
+
+--function to load models for generator, discriminator, semantic segmentation, features and noise
+function load_models()
+
+	if opt.continue_train == 1 then
+		print('loading previously trained netG...')
+		netG = util.load(paths.concat(opt.checkpoints_dir, opt.name, 'latest_net_G.t7'), opt)
+		print('loading previously trained netD...')
+		netD = util.load(paths.concat(opt.checkpoints_dir, opt.name, 'latest_net_D.t7'), opt)
+		if opt.NSYNTH_DATA_ROOT ~= '' then
+			print('loading previously trained netSS...')
+			netSS = torch.load(paths.concat(opt.checkpoints_dir, opt.name, 'latest_net_SS.net'))
+			netSS:training()
+
+			print('define model netDynSS...')
+			netDynSS = nn.Sequential()
+			local convDyn = nn.SpatialFullConvolution(20,1,1,1,1,1)
+			convDyn.weight[{{1,12},1,1,1}] = -8/20 -- Static
+			convDyn.weight[{{13,20},1,1,1}] = 12/20 -- Dynamic
+			convDyn.bias:zero()
+			netDynSS:add(nn.SoftMax())
+			netDynSS:add(convDyn)
+			netDynSS:add(nn.Tanh())
+		end
+	else
+		print('define model netG...')
+		netG = defineG(opt.input_gan_nc + opt.mask_nc*opt.condition_mG, opt.output_gan_nc, opt.ngf)
+		print('define model netD...')
+		netD = defineD(opt.input_gan_nc + opt.mask_nc*opt.condition_mD + opt.noise_nc*opt.condition_noise, opt.output_gan_nc, opt.ndf)
+	end
+
+	-- define netFeatures model 
+	lossFeatures = opt.lossDetector + opt.lossOrientation + opt.lossDescriptor
+	local stride = 5
+	if lossFeatures > 0 then
+		print('define model netFeatures...')
+		netFeaturesReal = define_netFeatures(opt.lossDetector, opt.lossOrientation, opt.lossDescriptor, stride)
+		netFeaturesReal:evaluate()
+		netFeaturesFake = define_netFeatures(opt.lossDetector, opt.lossOrientation, opt.lossDescriptor, stride)
+		netFeaturesFake:evaluate()
+		if opt.output_gan_nc == 3 then
+			netRGB2GrayReal = define_RGB2Gray()
+			netRGB2GrayReal:evaluate()
+			netRGB2GrayFake = define_RGB2Gray()
+			netRGB2GrayFake:evaluate()
+		end
+	end
+
+	-- define SRM noise model 
+	if opt.condition_noise == 1 then
+		print('define model netSRM...')
+		netNoise = define_netNoise(opt.output_gan_nc)
+		netNoise:evaluate()
+	end
+end
+
+--function to transfer networks and tensors to gpu if opt.gpu = 1
+function transfer_to_gpu()
+	if opt.gpu > 0 then
+		print('transferring to gpu...')
+		require 'cunn'
+		cutorch.setDevice(opt.gpu)
+		realRGB_A = realRGB_A:cuda()
+		val_realRGB_A = val_realRGB_A:cuda()
+		realRGB_B = realRGB_B:cuda(); fake_B = fake_B:cuda()
+		val_realRGB_B = val_realRGB_B:cuda(); val_fake_B = val_fake_B:cuda()
+		real_C = real_C:cuda()
+		val_real_C = val_real_C:cuda()
+		real_ABC = real_ABC:cuda(); fake_ABC = fake_ABC:cuda()
+		if opt.cudnn==1 then
+			netG = util.cudnn(netG); netD = util.cudnn(netD)
+		end
+		netD:cuda(); netG:cuda() 
+		if lossFeatures > 0 then
+			netFeaturesReal:cuda()
+			netFeaturesFake:cuda()
+			if opt.output_gan_nc == 3 then
+				netRGB2GrayReal:cuda()
+				netRGB2GrayFake:cuda()
+			end
+		end
+		if opt.NSYNTH_DATA_ROOT ~= '' then
+			netDynSS:cuda()
+			criterionSS:cuda()
+		end
+		if opt.condition_noise == 1 then
+			netNoise:cuda()
+		end
+		print('done')
+	else
+		print('running model on CPU')
+	end
+end
+
 -- generator with encoder and decoder
 function defineG_encoder_decoder(input_nc, output_nc, ngf)
 	local netG = nil 

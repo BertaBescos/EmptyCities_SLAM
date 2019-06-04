@@ -57,3 +57,30 @@ function WeightedAbsCriterion:updateGradInput(input, target)
 
 	return self.gradInput
 end
+
+function WeightedCECriterion()
+	local classes = {'Unlabeled', 'Road', 'Sidewalk', 'Building', 'Wall', 'Fence','Pole', 'TrafficLight', 'TrafficSign', 'Vegetation', 'Terrain', 'Sky', 'Person', 'Rider', 'Car', 'Truck', 'Bus', 'Train', 'Motorcycle', 'Bicycle'}
+	local classWeights = torch.Tensor(#classes)
+	classWeights[1] = 0.0				-- unkown
+	classWeights[2] = 2.8149201869965	-- road
+	classWeights[3] = 6.9850029945374	-- sidewalk
+	classWeights[4] = 3.7890393733978	-- building
+	classWeights[5] = 9.9428062438965	-- wall
+	classWeights[6] = 9.7702074050903	-- fence
+	classWeights[7] = 9.5110931396484	-- pole
+	classWeights[8] = 10.311357498169	-- traffic light
+	classWeights[9] = 10.026463508606	-- traffic sign
+	classWeights[10] = 4.6323022842407	-- vegetation
+	classWeights[11] = 9.5608062744141	-- terrain
+	classWeights[12] = 7.8698215484619	-- sky
+	classWeights[13] = 9.5168733596802	-- person
+	classWeights[14] = 10.373730659485	-- rider
+	classWeights[15] = 6.6616044044495	-- car
+	classWeights[16] = 10.260489463806	-- truck
+	classWeights[17] = 10.287888526917	-- bus
+	classWeights[18] = 10.289801597595	-- train
+	classWeights[19] = 10.405355453491	-- motorcycle
+	classWeights[20] = 10.138095855713	-- bicycle
+	
+	return cudnn.SpatialCrossEntropyCriterion(classWeights)
+end

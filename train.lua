@@ -135,116 +135,12 @@ local real_label = 1
 local fake_label = 0
 local synth_label = 1
 
--- function to load discriminator D
-function defineD(input_nc, output_nc, ndf)
-	local netD = nil
-	if opt.condition_GAN==1 or opt.condition_mD==1 then
-		input_nc_tmp = input_nc
-	else
-		input_nc_tmp = 0 -- only penalizes structure in output channels
-	end
-	if opt.which_model_netD == "basic" then 
-		netD = defineD_basic(input_nc_tmp, output_nc, ndf)
-	elseif opt.which_model_netD == "n_layers" then 
-		netD = defineD_n_layers(input_nc_tmp, output_nc, ndf, opt.n_layers_D)  
-	else error("unsupported netD model")
-	end
-	netD:apply(weights_init)
-	return netD
-end
-
--- load saved models
-if opt.continue_train == 1 then
-	print('loading previously trained netG...')
-	netG = util.load(paths.concat(opt.checkpoints_dir, opt.name, 'latest_net_G.t7'), opt)
-	print('loading previously trained netD...')
-	netD = util.load(paths.concat(opt.checkpoints_dir, opt.name, 'latest_net_D.t7'), opt)
-	if opt.NSYNTH_DATA_ROOT ~= '' then
-		if opt.epoch_ini > opt.epoch_synth then
-			print('loading previously trained netSS...')
-			local ss_path = paths.concat(opt.checkpoints_dir, opt.name, 'latest_net_SS.net')
-			netSS = torch.load(ss_path)
-			netSS:training()
-		else
-			print('define model netSS...')
-			local ss_path = "./checkpoints/SemSeg/erfnet.net"
-			netSS = torch.load(ss_path)
-			netSS:training()
-		end
-	end
-else
-	print('define model netG...')
-	netG = defineG(input_gan_nc + mask_nc*opt.condition_mG, output_gan_nc, ngf)
-	print('define model netD...')
-	netD = defineD(input_gan_nc + mask_nc*opt.condition_mD + noise_nc*opt.condition_noise, output_gan_nc, ndf)
-	if opt.NSYNTH_DATA_ROOT ~= '' then
-		print('define model netSS...')
-		local ss_path = "./checkpoints/SemSeg/erfnet.net"
-		netSS = torch.load(ss_path)
-		netSS:training()
-	end
-end
-
--- define netDynSS model 
-if opt.NSYNTH_DATA_ROOT ~= '' then
-	print('define model netDynSS...')
-	netDynSS = nn.Sequential()
-	local convDyn = nn.SpatialFullConvolution(20,1,1,1,1,1)
-	convDyn.weight[{{1,12},1,1,1}] = -8/20 -- Static
-	convDyn.weight[{{13,20},1,1,1}] = 12/20 -- Dynamic
-	convDyn.bias:zero()
-	netDynSS:add(nn.SoftMax())
-	netDynSS:add(convDyn)
-	netDynSS:add(nn.Tanh())
-end
-
--- define netFeatures model 
-local lossFeatures = opt.lossDetector + opt.lossOrientation + opt.lossDescriptor
-local stride = 5
-if lossFeatures > 0 then
-	print('define model netFeatures...')
-	netFeaturesReal = define_netFeatures(opt.lossDetector, opt.lossOrientation, opt.lossDescriptor, stride)
-	netFeaturesReal:evaluate()
-	netFeaturesFake = define_netFeatures(opt.lossDetector, opt.lossOrientation, opt.lossDescriptor, stride)
-	netFeaturesFake:evaluate()
-	if opt.output_gan_nc == 3 then
-		netRGB2GrayReal = define_RGB2Gray()
-		netRGB2GrayReal:evaluate()
-		netRGB2GrayFake = define_RGB2Gray()
-		netRGB2GrayFake:evaluate()
-	end
-end
-
-if opt.condition_noise == 1 then
-	netNoise = define_netNoise(output_gan_nc)
-	netNoise:evaluate()
-end
+-- load models for generator, discriminator, semantic segmentation, features and SRM noise
+load_models()
 
 -- define criteria
 if opt.NSYNTH_DATA_ROOT ~= '' then
-	local classes = {'Unlabeled', 'Road', 'Sidewalk', 'Building', 'Wall', 'Fence','Pole', 'TrafficLight', 'TrafficSign', 'Vegetation', 'Terrain', 'Sky', 'Person', 'Rider', 'Car', 'Truck', 'Bus', 'Train', 'Motorcycle', 'Bicycle'}
-	local classWeights = torch.Tensor(#classes)
-	classWeights[1] = 0.0				-- unkown
-	classWeights[2] = 2.8149201869965	-- road
-	classWeights[3] = 6.9850029945374	-- sidewalk
-	classWeights[4] = 3.7890393733978	-- building
-	classWeights[5] = 9.9428062438965	-- wall
-	classWeights[6] = 9.7702074050903	-- fence
-	classWeights[7] = 9.5110931396484	-- pole
-	classWeights[8] = 10.311357498169	-- traffic light
-	classWeights[9] = 10.026463508606	-- traffic sign
-	classWeights[10] = 4.6323022842407	-- vegetation
-	classWeights[11] = 9.5608062744141	-- terrain
-	classWeights[12] = 7.8698215484619	-- sky
-	classWeights[13] = 9.5168733596802	-- person
-	classWeights[14] = 10.373730659485	-- rider
-	classWeights[15] = 6.6616044044495	-- car
-	classWeights[16] = 10.260489463806	-- truck
-	classWeights[17] = 10.287888526917	-- bus
-	classWeights[18] = 10.289801597595	-- train
-	classWeights[19] = 10.405355453491	-- motorcycle
-	classWeights[20] = 10.138095855713	-- bicycle
-	criterionSS = cudnn.SpatialCrossEntropyCriterion(classWeights)
+	criterionSS = WeightedCECriterion()
 end
 
 ---------------------------------------------------------------------------
@@ -266,20 +162,20 @@ end
 
 ----------------------------------------------------------------------------
 
-local realRGB_A = torch.Tensor(opt.batchSize, input_nc, opt.fineSizeH, opt.fineSizeW)
-local val_realRGB_A = torch.Tensor(opt.batchSize, input_nc, opt.fineSizeH, opt.fineSizeW)
-local realRGB_B = torch.Tensor(opt.batchSize, output_nc, opt.fineSizeH, opt.fineSizeW)
-local val_realRGB_B = torch.Tensor(opt.batchSize, output_nc, opt.fineSizeH, opt.fineSizeW)
-local real_C = torch.Tensor(opt.batchSize, mask_nc, opt.fineSizeH, opt.fineSizeW) --bbescos
-local val_real_C = torch.Tensor(opt.batchSize, mask_nc, opt.fineSizeH, opt.fineSizeW) --bbescos
-local fake_B = torch.Tensor(opt.batchSize, output_gan_nc, opt.fineSizeH, opt.fineSizeW)
-local val_fake_B = torch.Tensor(opt.batchSize, output_gan_nc, opt.fineSizeH, opt.fineSizeW)
-local real_AC = torch.Tensor(opt.batchSize, input_gan_nc + mask_nc, opt.fineSizeH, opt.fineSizeW)
-local val_real_AC = torch.Tensor(opt.batchSize, input_gan_nc + mask_nc, opt.fineSizeH, opt.fineSizeW)
-local real_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
-local val_real_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
-local fake_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
-local val_fake_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
+realRGB_A = torch.Tensor(opt.batchSize, input_nc, opt.fineSizeH, opt.fineSizeW)
+val_realRGB_A = torch.Tensor(opt.batchSize, input_nc, opt.fineSizeH, opt.fineSizeW)
+realRGB_B = torch.Tensor(opt.batchSize, output_nc, opt.fineSizeH, opt.fineSizeW)
+val_realRGB_B = torch.Tensor(opt.batchSize, output_nc, opt.fineSizeH, opt.fineSizeW)
+real_C = torch.Tensor(opt.batchSize, mask_nc, opt.fineSizeH, opt.fineSizeW) --bbescos
+val_real_C = torch.Tensor(opt.batchSize, mask_nc, opt.fineSizeH, opt.fineSizeW) --bbescos
+fake_B = torch.Tensor(opt.batchSize, output_gan_nc, opt.fineSizeH, opt.fineSizeW)
+val_fake_B = torch.Tensor(opt.batchSize, output_gan_nc, opt.fineSizeH, opt.fineSizeW)
+real_AC = torch.Tensor(opt.batchSize, input_gan_nc + mask_nc, opt.fineSizeH, opt.fineSizeW)
+val_real_AC = torch.Tensor(opt.batchSize, input_gan_nc + mask_nc, opt.fineSizeH, opt.fineSizeW)
+real_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
+val_real_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
+fake_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
+val_fake_ABC = torch.Tensor(opt.batchSize, input_gan_nc + output_gan_nc*opt.condition_GAN + mask_nc*opt.condition_mG, opt.fineSizeH, opt.fineSizeW)
 
 local errD, errG, errL1, errFeatures, errSS, errERFNet = 0, 0, 0, 0, 0, 0
 local val_errL1 = 0
@@ -289,44 +185,10 @@ local data_tm = torch.Timer()
 
 ----------------------------------------------------------------------------
 
-if opt.gpu > 0 then
-	print('transferring to gpu...')
-	require 'cunn'
-	cutorch.setDevice(opt.gpu)
-	realRGB_A = realRGB_A:cuda()
-	val_realRGB_A = val_realRGB_A:cuda()
-	realRGB_B = realRGB_B:cuda(); fake_B = fake_B:cuda()
-	val_realRGB_B = val_realRGB_B:cuda(); val_fake_B = val_fake_B:cuda()
-	real_C = real_C:cuda()
-	val_real_C = val_real_C:cuda()
-	real_ABC = real_ABC:cuda(); fake_ABC = fake_ABC:cuda()
-	if opt.cudnn==1 then
-		netG = util.cudnn(netG); netD = util.cudnn(netD)
-	end
-	netD:cuda(); netG:cuda() 
-	if lossFeatures > 0 then
-		netFeaturesReal:cuda()
-		netFeaturesFake:cuda()
-		if opt.output_gan_nc == 3 then
-			netRGB2GrayReal:cuda()
-			netRGB2GrayFake:cuda()
-		end
-	end
-	if opt.NSYNTH_DATA_ROOT ~= '' then
-		netDynSS:cuda()
-		criterionSS:cuda()
-	end
-	if opt.condition_noise == 1 then
-		netNoise:cuda()
-	end
-	print('done')
-else
-	print('running model on CPU')
-end
+transfer_to_gpu()
 
 local parametersD, gradParametersD = netD:getParameters()
 local parametersG, gradParametersG = netG:getParameters()
-
 if opt.NSYNTH_DATA_ROOT ~= '' then
 	parametersSS, gradParametersSS = netSS:getParameters()
 end
