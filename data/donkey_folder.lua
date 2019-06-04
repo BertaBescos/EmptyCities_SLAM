@@ -72,14 +72,14 @@ local preprocess = function(imA, imB, imC)
 	local iW = imA:size(3)
 
 	if iH~=oH then     
-		--h1 = math.ceil(torch.uniform(1e-2, iH-oH))
-		h1 = 8
+		h1 = math.ceil(torch.uniform(1e-2, iH-oH))
+		--h1 = 8
 		--h1 = 16
 	end
 	
 	if iW~=oW then
-		--w1 = math.ceil(torch.uniform(1e-2, iW-oW))
-		w1 = 314
+		w1 = math.ceil(torch.uniform(1e-2, iW-oW))
+		--w1 = 314
 		--w1 = 16
 	end
 	if iH ~= oH or iW ~= oW then 

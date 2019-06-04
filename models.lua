@@ -1,7 +1,7 @@
 require 'nngraph'
 
+-- definition of normalization types
 normalization = nil
-
 function set_normalization(norm)
 	if norm == 'instance' then
 		require 'util.InstanceNormalization'
@@ -13,6 +13,41 @@ function set_normalization(norm)
 	end
 end
 
+-- initialization of model weights
+function weights_init(m)
+	local name = torch.type(m)
+	if name:find('Convolution') then
+		m.weight:normal(0.0, 0.02)
+		m.bias:fill(0)
+	elseif name:find('BatchNormalization') then
+		if m.weight then m.weight:normal(1.0, 0.02) end
+		if m.bias then m.bias:fill(0) end
+	end
+end
+
+-- function to load generator G
+function defineG(input_nc, output_nc, ngf)
+	local netG = nil
+	if     opt.which_model_netG == "encoder_decoder" then 
+		netG = defineG_encoder_decoder(input_nc, output_nc, ngf)
+	elseif opt.which_model_netG == "unet" then 
+		netG = defineG_unet(input_nc, output_nc, ngf)
+	elseif opt.which_model_netG == "unet_128" then 
+		netG = defineG_unet_128(input_nc, output_nc, ngf)
+	elseif opt.which_model_netG == "unet_upsample" then
+		netG = defineG_unet_upsampling(input_nc, output_nc, ngf)
+	elseif opt.which_model_netG == "resnet_512" then
+		netG = defineG_resnet_512(input_nc, output_nc, ngf)
+	elseif opt.which_model_netG == "uresnet_512" then 
+		netG = defineG_Uresnet_512(input_nc, output_nc, ngf)
+	else
+		error("unsupported netG model")
+	end
+	netG:apply(weights_init)
+	return netG
+end
+
+-- generator with encoder and decoder
 function defineG_encoder_decoder(input_nc, output_nc, ngf)
 	local netG = nil 
 	-- input is (nc) x 256 x 256
@@ -57,6 +92,7 @@ function defineG_encoder_decoder(input_nc, output_nc, ngf)
 	return netG
 end
 
+-- generator with encoder, decoder and skip connections
 function defineG_unet(input_nc, output_nc, ngf)
 	local netG = nil
 	-- input is (nc) x 256 x 256
@@ -111,6 +147,8 @@ function defineG_unet(input_nc, output_nc, ngf)
 	return netG
 end
 
+-- generator with encoder, decoder and skip connections
+-- decoder has upsampling + stride 1 convolution rather than convolutions with stride 1/2
 function defineG_unet_upsampling(input_nc, output_nc, ngf)
 	local netG = nil
 	-- input is (nc) x 256 x 256
@@ -172,86 +210,7 @@ function defineG_unet_upsampling(input_nc, output_nc, ngf)
 	return netG
 end
 
-function defineG_2unet(input_nc, output_nc, mask_nc, ngf)
-	local netG = nil
-	-- input is (nc) x 256 x 256
-	local e1 = - nn.SpatialConvolution(input_nc, ngf, 4, 4, 2, 2, 1, 1)
-	-- input is (ngf) x 128 x 128
-	local e2 = e1 - nn.LeakyReLU(0.2, true) - nn.SpatialConvolution(ngf, ngf * 2, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 2)
-	-- input is (ngf * 2) x 64 x 64
-	local e3 = e2 - nn.LeakyReLU(0.2, true) - nn.SpatialConvolution(ngf * 2, ngf * 4, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 4)
-	-- input is (ngf * 4) x 32 x 32
-	local e4 = e3 - nn.LeakyReLU(0.2, true) - nn.SpatialConvolution(ngf * 4, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8)
-	-- input is (ngf * 8) x 16 x 16
-	local e5 = e4 - nn.LeakyReLU(0.2, true) - nn.SpatialConvolution(ngf * 8, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8)
-	-- input is (ngf * 8) x 8 x 8
-	local e6 = e5 - nn.LeakyReLU(0.2, true) - nn.SpatialConvolution(ngf * 8, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8)
-	-- input is (ngf * 8) x 4 x 4
-	local e7 = e6 - nn.LeakyReLU(0.2, true) - nn.SpatialConvolution(ngf * 8, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8)
-	-- input is (ngf * 8) x 2 x 2
-	local e8 = e7 - nn.LeakyReLU(0.2, true) - nn.SpatialConvolution(ngf * 8, ngf * 8, 4, 4, 2, 2, 1, 1) -- nn.SpatialBatchNormalization(ngf * 8)
-	
-	-- input is (ngf * 8) x 1 x 1
-	local d1_ = e8 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8) - nn.Dropout(0.5)
-	-- input is (ngf * 8) x 2 x 2
-	local d1 = {d1_,e7} - nn.JoinTable(2)
-	local d2_ = d1 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8 * 2, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8) - nn.Dropout(0.5)
-	-- input is (ngf * 8) x 4 x 4
-	local d2 = {d2_,e6} - nn.JoinTable(2)
-	local d3_ = d2 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8 * 2, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8) - nn.Dropout(0.5)
-	-- input is (ngf * 8) x 8 x 8
-	local d3 = {d3_,e5} - nn.JoinTable(2)
-	local d4_ = d3 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8 * 2, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8)
-	-- input is (ngf * 8) x 16 x 16
-	local d4 = {d4_,e4} - nn.JoinTable(2)
-	local d5_ = d4 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8 * 2, ngf * 4, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 4)
-	-- input is (ngf * 4) x 32 x 32
-	local d5 = {d5_,e3} - nn.JoinTable(2)
-	local d6_ = d5 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 4 * 2, ngf * 2, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 2)
-	-- input is (ngf * 2) x 64 x 64
-	local d6 = {d6_,e2} - nn.JoinTable(2)
-	local d7_ = d6 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 2 * 2, ngf, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf)
-	-- input is (ngf) x128 x 128
-	local d7 = {d7_,e1} - nn.JoinTable(2)
-	local d8 = d7 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 2, output_nc, 4, 4, 2, 2, 1, 1)
-	-- input is (nc) x 256 x 256
-	
-	local o1 = d8 - nn.Tanh()
-	
-	-- input is (ngf * 8) x 1 x 1
-	local pm1_ = e8 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8) - nn.Dropout(0.5)
-	-- input is (ngf * 8) x 2 x 2
-	local pm1 = {pm1_,e7} - nn.JoinTable(2)
-	local pm2_ = pm1 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8 * 2, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8) - nn.Dropout(0.5)
-	-- input is (ngf * 8) x 4 x 4
-	local pm2 = {pm2_,e6} - nn.JoinTable(2)
-	local pm3_ = pm2 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8 * 2, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8) - nn.Dropout(0.5)
-	-- input is (ngf * 8) x 8 x 8
-	local pm3 = {pm3_,e5} - nn.JoinTable(2)
-	local pm4_ = pm3 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8 * 2, ngf * 8, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 8)
-	-- input is (ngf * 8) x 16 x 16
-	local pm4 = {pm4_,e4} - nn.JoinTable(2)
-	local pm5_ = pm4 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 8 * 2, ngf * 4, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 4)
-	-- input is (ngf * 4) x 32 x 32
-	local pm5 = {pm5_,e3} - nn.JoinTable(2)
-	local pm6_ = pm5 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 4 * 2, ngf * 2, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf * 2)
-	-- input is (ngf * 2) x 64 x 64
-	local pm6 = {pm6_,e2} - nn.JoinTable(2)
-	local pm7_ = pm6 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 2 * 2, ngf, 4, 4, 2, 2, 1, 1) - nn.SpatialBatchNormalization(ngf)
-	-- input is (ngf) x128 x 128
-	local pm7 = {pm7_,e1} - nn.JoinTable(2)
-	local pm8 = pm7 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf * 2, mask_nc, 4, 4, 2, 2, 1, 1)
-	-- input is (nc) x 256 x 256
-	
-	local o2 = pm8 - nn.Tanh()    
-
-	netG = nn.gModule({e1},{o1,o2})
-	
-	--graph.dot(netG.fg,'netG','2unet')
-	
-	return netG
-end
-
+-- generator with encoder, decoder and skip connections
 function defineG_unet_128(input_nc, output_nc, ngf)
 	-- Two layer less than the default unet to handle 128x128 input
 	local netG = nil
@@ -301,6 +260,7 @@ function defineG_unet_128(input_nc, output_nc, ngf)
 	return netG
 end
 
+-- definition of one ResNet block
 local function resnetBlock(dim, padding_type)
 	convBlock = nn.Sequential()
 	local padding = 0
@@ -333,6 +293,7 @@ local function resnetBlock(dim, padding_type)
 	return resBlock
 end
 
+-- generator with encoder, 6 ResNet blocks and decoder
 function defineG_resnet_512(input_nc, output_nc, ngf)
 	local netG = nil
 	padding_type = 'reflect'
@@ -362,6 +323,7 @@ function defineG_resnet_512(input_nc, output_nc, ngf)
 	return netG
 end
 
+-- generator with encoder, 6 ResNet blocks, decoder and skip connections
 function defineG_Uresnet_512(input_nc, output_nc, ngf)
 	local netG = nil
 	padding_type = 'reflect'
@@ -397,28 +359,29 @@ function defineG_Uresnet_512(input_nc, output_nc, ngf)
 	return netG
 end
 
+-- generator with encoder, 6 ResNet blocks and decoder
 function defineG_resnet_256(input_nc, output_nc, ngf)
 	local netG = nil
 	padding_type = 'reflect'
 
-	-- input is (nc) x 512 x 512
+	-- input is (nc) x 256 x 256
 	local e1_ = - nn.Identity()
 	local e1 = e1_ - nn.SpatialReflectionPadding(3, 3, 3, 3) - nn.SpatialConvolution(input_nc, ngf, 7, 7, 1, 1) - normalization(ngf)
-	-- input is (nc) x 512 x 512
+	-- input is (nc) x 256 x 256
 	local e2 = e1 - nn.ReLU(true) - nn.SpatialConvolution(ngf, ngf*2, 3, 3, 2, 2, 1, 1) - normalization(ngf*2)
-	-- input is (nc) x 256 x 256
+	-- input is (nc) x 128 x 128
 	local e3 = e2 - nn.ReLU(true) - nn.SpatialConvolution(ngf*2, ngf*4, 3, 3, 2, 2, 1, 1) - normalization(ngf*4)
-	-- input is (nc) x 128 x 128
+	-- input is (nc) x 64 x 64
 	local e4 = e3 - nn.ReLU(true) - nn.SpatialConvolution(ngf*4, ngf*8, 3, 3, 2, 2, 1, 1) - normalization(ngf*8)
-	-- input is (nc) x 64 x 64
+	-- input is (nc) x 32 x 32
 	local d1 = e4 - resnetBlock(ngf*8, padding_type) - resnetBlock(ngf*8, padding_type) - resnetBlock(ngf*8, padding_type) - resnetBlock(ngf*8, padding_type) - resnetBlock(ngf*8, padding_type) - resnetBlock(ngf*8, padding_type)
-	-- input is (nc) x 64 x 64
+	-- input is (nc) x 32 x 32
 	local d2 = d1 - nn.SpatialFullConvolution(ngf*8, ngf*4, 3, 3, 2, 2, 1, 1, 1, 1) - normalization(ngf*4)
-	-- input is (nc) x 128 x 128
+	-- input is (nc) x 64 x 64
 	local d3 = d2 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf*4, ngf*2, 3, 3, 2, 2, 1, 1, 1, 1) - normalization(ngf*2)
-	-- input is (nc) x 256 x 256
+	-- input is (nc) x 128 x 128
 	local d4 = d3 - nn.ReLU(true) - nn.SpatialFullConvolution(ngf*2, ngf, 3, 3, 2, 2, 1, 1, 1, 1) - normalization(ngf)
-	-- input is (nc) x 512 x 512
+	-- input is (nc) x 256 x 256
 	local d5 = d4 - nn.SpatialReflectionPadding(3, 3, 3, 3) - nn.SpatialConvolution(ngf, output_nc, 7, 7, 1, 1) - nn.Tanh()
 
 	netG = nn.gModule({e1_},{d5})
@@ -426,12 +389,13 @@ function defineG_resnet_256(input_nc, output_nc, ngf)
 	return netG
 end
 
+-- discriminator definition
 function defineD_basic(input_nc, output_nc, ndf)
 	n_layers = 3
 	return defineD_n_layers(input_nc, output_nc, ndf, n_layers)
 end
 
--- rf=1
+-- discriminator at pixel level
 function defineD_pixelGAN(input_nc, output_nc, ndf)
 	local netD = nn.Sequential()
 	
@@ -493,50 +457,6 @@ function defineD_n_layers(input_nc, output_nc, ndf, n_layers)
 	end
 end
 
--- function to compute kernel for features detection
---[[local detHessian = function(kernel_size)
-
-	local lobe_size = kernel_size/3
-	val0 = torch.round((kernel_size - lobe_size*2 - 1)/2)
-	val1 = torch.round(kernel_size/6 + 0.5)
-
-	a = torch.Tensor(1,lobe_size):zero():add(1)
-	b = torch.Tensor(1,lobe_size):zero():add(-2)
-	c = torch.Tensor(1,lobe_size):zero():add(1)
-	temp1 = torch.cat(torch.cat(a,b),c)
-	d = torch.Tensor(1,lobe_size):zero():add(-1)
-	e = torch.Tensor(1,val0):zero()
-	f = torch.Tensor(1,1):zero()
-	temp2 = torch.cat(torch.cat(torch.cat(torch.cat(e,c),f),d),e)
-	temp3 = torch.cat(torch.cat(torch.cat(torch.cat(e,d),f),c),e)
-
-	local Dxx = torch.Tensor(kernel_size, kernel_size):zero()
-	for i = 1, kernel_size - 2*val1 do
-		Dxx[val1 + i] = temp1
-	end
-	local Dyy = Dxx:transpose(1,2)
-	local Dxy = torch.Tensor(kernel_size, kernel_size):zero()
-	for i = 1, lobe_size do
-		Dxy[val0 + i] = temp2
-		Dxy[lobe_size + val0 + 1 + i] = temp3
-	end
-
-	--image.save('Dxx.png', (Dxx - Dxx:min())/(Dxx:max() - Dxx:min()))
-	--image.save('Dyy.png', (Dyy - Dyy:min())/(Dyy:max() - Dyy:min()))
-	--image.save('Dxy.png', (Dxy - Dxy:min())/(Dxy:max() - Dxy:min()))
-
-	detHessian = torch.cmul(Dxx, Dyy) - 0.81*torch.cmul(Dxy,Dxy)
-
-	detHessian = (detHessian - detHessian:mean()) / detHessian:std()
-
-	--image.save('kernel_norm.png', detHessian)
-
-	return detHessian
-end]]--
-
---local kernel_sizes = torch.Tensor({9, 15, 21, 27, 39, 51, 75, 99})
---local thresholds = torch.Tensor({1, 1, 1, 1, 1, 1, 1, 1})
---local kernel_size = 29
 local pattern = torch.Tensor({{8,-3, 9,5},--mean (0), correlation (0){
 	{4,2, 7,-12},--mean (1.12461e-05), correlation (0.0437584){
 	{-11,9, -8,2},--mean (3.37382e-05), correlation (0.0617409){
@@ -1073,31 +993,6 @@ function FASTKernels()
     return kernel_stack
 end
 
---[[function define_netLayer(layer)
-	
-	local kernel_size = kernel_sizes[layer]
-	local hessian_threshold = thresholds[layer]
-	local padding_size = (kernel_size - 1)/2
-
-	local netLayer = nn.Sequential()
-
-	local conv1 = nn.SpatialConvolution(1, 1, kernel_size, kernel_size, 1, 1, 0, 0)
-	conv1.weight = detHessian(kernel_size)
-	conv1.bias:zero()
-
-	local conv2 = nn.Power(2)
-    local conv3 = nn.Add(1, true)
-    conv3.bias:zero():add(-hessian_threshold)
-
-	netLayer:add(nn.SpatialReplicationPadding(padding_size, padding_size, padding_size, padding_size))
-	netLayer:add(conv1)
-	netLayer:add(conv2)
-	netLayer:add(conv3)
-	netLayer:add(nn.Sigmoid())
-
-	return netLayer
-end]]--
-
 function create_orientation_kernels(kernel_size)
 
 	-- function to compute the kenrles for moments of a patch
@@ -1141,18 +1036,6 @@ function create_pattern_kernels(pattern, kernel_size)
 
 	return kernel_stack
 end
-
---[[function define_netFDetectorSURF(nLayers)
-
-	local netFDetector = nn.DepthConcat(2)
-
-	for i = 1, nLayers do
-		local netLayer = define_netLayer(i)
-		netFDetector:add(netLayer)
-	end
-
-	return netFDetector
-end]]--
 
 function define_netFDetector(stride)
 
@@ -1212,53 +1095,6 @@ function define_netFDescriptor(stride)
 	return net
 end
 
---[[function define_netFeatures(lossDetector, lossOrientation, lossDescriptor, nLayers, stride)
-
-	local netFeatures = nn.DepthConcat(2)
-
-	if lossDetector == 1 then
-		local netFDetector = define_netFDetectorSURF(nLayers)
-		if lossOrientation == 1 then
-			local netFOrientation = define_netFOrientation(stride)
-			if lossDescriptor == 1 then
-				local netFDescriptor = define_netFDescriptor(stride)
-				netFeatures:add(netFDetector)
-				netFeatures:add(netFOrientation)
-				netFeatures:add(netFDescriptor)
-			else
-				netFeatures:add(netFDetector)
-				netFeatures:add(netFOrientation)
-			end
-		else
-			if lossDescriptor == 1 then
-				local netFDescriptor = define_netFDescriptor(stride)
-				netFeatures:add(netFDetector)
-				netFeatures:add(netFDescriptor)
-			else
-				netFeatures:add(netFDetector)
-			end
-		end
-	else
-		if lossOrientation == 1 then
-			local netFOrientation = define_netFOrientation(stride)
-			if lossDescriptor == 1 then
-				local netFDescriptor = define_netFDescriptor(stride)
-				netFeatures:add(netFOrientation)
-				netFeatures:add(netFDescriptor)
-			else
-				netFeatures:add(netFOrientation)
-			end
-		else
-			if lossDescriptor == 1 then
-				local netFDescriptor = define_netFDescriptor(stride)
-				netFeatures:add(netFDescriptor)
-			end
-		end
-	end
-
-	return netFeatures
-end]]--
-
 function define_netFeatures(lossDetector, lossOrientation, lossDescriptor, stride)
 
 	local netFeatures = nn.DepthConcat(2)
@@ -1290,22 +1126,6 @@ function define_netFeatures(lossDetector, lossOrientation, lossDescriptor, strid
 	return netFeatures
 end
 
---[[function computeFeaturesDetectorSURF(nLayers, input)
-
-	local netFDetector = define_netFDetectorSURF(nLayers)
-	
-	if opt.gpu == 1 then
-		netFDetector:cuda()
-	end
-
-    local temp = netFDetector:forward(input)
-    
-    temp[temp:gt(0.5)] = 1
-    temp[temp:le(0.5)] = 0
-
-    return temp
-end]]--
-
 function computeFeaturesDetector(stride, input)
 
 	local netFDetector = define_netFDetector(stride)
@@ -1322,33 +1142,6 @@ function computeFeaturesDetector(stride, input)
     return temp
 end
 
---[[function computeFeaturesOrientation(boolDetector, stride, input)
-
-    local netFOrientation = define_netFOrientation(stride)
-
-    if opt.gpu == 1 then
-    	netFOrientation:cuda()
-    end
-
-    local temp = netFOrientation:forward(input)
-    local corrective_size = temp:size(3)
-
-    local featuresOrientation = nil
-    if boolDetector == 1 then
-    	local step = temp:size(3)
-    	local beg = math.floor((512 - step)/2)
-        featuresOrientation = torch.zeros(temp:size(1),3,512,512)
-        if opt.gpu == 1 then
-        	featuresOrientation = featuresOrientation:cuda()
-        end
-        featuresOrientation[{{},{},{beg + 1, beg + step},{beg + 1, beg + step}}] = temp
-    else
-        featuresOrientation = temp
-    end
-
-    return featuresOrientation, corrective_size
-end]]--
-
 function computeFeaturesOrientation(stride, input)
 
     local netFOrientation = define_netFOrientation(5)
@@ -1361,33 +1154,6 @@ function computeFeaturesOrientation(stride, input)
 
     return featuresOrientation
 end
-
---[[function computeFeaturesDescriptor(boolDetector, stride, input)
-
-    local netFDescriptor = define_netFDescriptor(stride)
-
-    if opt.gpu == 1 then
-    	netFDescriptor:cuda()
-    end
-
-    local temp = netFDescriptor:forward(input)
-    local step = temp:size(3)
-    local corrective_size = temp:size(3)
-    local beg = math.floor((512 - step)/2)
-    
-    temp[temp:gt(0.5)] = 1
-    temp[temp:le(0.5)] = 0
-
-    local featuresDescriptor = nil
-    if boolDetector == 1 then
-        featuresDescriptor = torch.zeros(1,256,512,512)
-        featuresDescriptor[{{},{},{beg + 1, beg + step},{beg + 1, beg + step}}] = temp
-    else
-        featuresDescriptor = temp
-    end
-
-    return featuresDescriptor, corrective_size
-end]]--
 
 function computeFeaturesDescriptor(stride, input)
 
@@ -1404,52 +1170,6 @@ function computeFeaturesDescriptor(stride, input)
 
     return featuresDescriptor
 end
-
---[[function computeFeaturesSURF(lossDetector, lossOrientation, lossDescriptor, nLayers, stride, input)
-    
-    local features = nil
-    local corrective_size = 512
-
-    if lossDetector == 1 then
-        local featuresDetector = computeFeaturesDetectorSURF(nLayers, input)
-        if lossOrientation == 1 then
-            local featuresOrientation, _corrective_size = computeFeaturesOrientation(lossDetector, stride, input)
-            corrective_size = _corrective_size
-            if lossDescriptor == 1 then
-                local featuresDescriptor = computeFeaturesDescriptor(lossDetector, stride, input)
-                features = torch.cat(torch.cat(featuresDetector, featuresOrientation, 2), featuresDescriptor, 2)
-            else
-                features = torch.cat(featuresDetector, featuresOrientation, 2)
-            end
-        else
-            if lossDescriptor == 1 then
-                local featuresDescriptor = computeFeaturesDescriptor(lossDetector, stride, input)
-                features = torch.cat(featuresDetector, featuresDescriptor, 2)
-            else
-                features = featuresDetector:clone()
-            end
-        end
-    else
-        if lossOrientation == 1 then
-            local featuresOrientation, _corrective_size = computeFeaturesOrientation(lossDetector, stride, input)
-            corrective_size = _corrective_size
-            if lossDescriptor == 1 then
-                local featuresDescriptor = computeFeaturesDescriptor(lossDetector, stride, input)
-                features = torch.cat(featuresOrientation, featuresDescriptor, 2)
-            else
-                features = featuresOrientation:clone()
-            end
-        else
-            if lossDescriptor == 1 then
-                local featuresDescriptor, _corrective_size = computeFeaturesDescriptor(lossDetector, stride, input)
-                features = featuresDescriptor:clone()
-                corrective_size = _corrective_size
-            end
-        end
-    end
-
-    return features, corrective_size
-end]]--
 
 function computeFeatures(lossDetector, lossOrientation, lossDescriptor, stride, input)
     

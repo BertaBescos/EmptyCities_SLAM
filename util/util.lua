@@ -137,8 +137,6 @@ function util.deprocess_batch(batch)
 return batch
 end
 
-
-
 -- preprocessing specific to colorization
 
 function util.deprocessLAB(L, AB)
@@ -148,7 +146,7 @@ function util.deprocessLAB(L, AB)
     end
     local AB2 = torch.Tensor(AB:size()):copy(AB)
     AB2 = torch.clamp(AB2, -1.0, 1.0)
---    local AB2 = AB
+    -- local AB2 = AB
     L2 = L2:add(1):mul(50.0)
     AB2 = AB2:mul(110.0)
     
@@ -246,8 +244,6 @@ function util.loadImage(path, loadSize, nc)
     return input 
 end
 
-
-
 -- TO DO: loading code is rather hacky; clean it up and make sure it works on all types of nets / cpu/gpu configurations
 function util.load(filename, opt)
   if opt.cudnn>0 then
@@ -291,6 +287,13 @@ function util.containsValue(table, value)
     if v == value then return true end
   end
   return false
+end
+
+-- useful function for debugging
+function util.pause ()
+   print("Press any key to continue.")
+   io.flush()
+   io.read()
 end
 
 return util

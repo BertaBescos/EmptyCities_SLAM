@@ -85,13 +85,7 @@ opt = {
 for k,v in pairs(opt) do opt[k] = tonumber(os.getenv(k)) or os.getenv(k) or opt[k] end
 print(opt)
 
--- useful function for debugging
-function pause ()
-	 print("Press any key to continue.")
-	 io.flush()
-	 io.read()
-end
-
+-- define helpful variables
 local input_nc = opt.input_nc
 local output_nc = opt.output_nc
 local mask_nc = opt.mask_nc
@@ -99,14 +93,9 @@ local input_gan_nc = opt.input_gan_nc
 local output_gan_nc = opt.output_gan_nc
 local noise_nc = opt.noise_nc
 
--- translation direction
-local idx_A = nil
-local idx_B = nil
-local idx_C = nil
-
-idx_A = {1, input_nc}
-idx_B = {input_nc + 1, input_nc + output_nc}
-idx_C = {input_nc + output_nc + 1, input_nc + output_nc + mask_nc}
+local idx_A = {1, input_nc}
+local idx_B = {input_nc + 1, input_nc + output_nc}
+local idx_C = {input_nc + output_nc + 1, input_nc + output_nc + mask_nc}
 
 if opt.display == 0 then opt.display = false end
 
@@ -126,30 +115,16 @@ print("Validation CARLA Dataset Size: ", val_synth_data:size())
 
 -- create data loader for real images (train and val)
 if opt.NSYNTH_DATA_ROOT ~= '' then
-	 opt.phase = 'train'
-	 nsynth_data_loader = paths.dofile('data/data_nsynth.lua') --bbescos
-	 nsynth_data = nsynth_data_loader.new(opt.nThreads, opt) --bbescos
-	 print("Non Synthetic Dataset Size: ", nsynth_data:size())
-	 opt.phase = 'val'
-	 val_nsynth_data = nsynth_data_loader.new(opt.nThreads, opt) --bbescos
-	 print("Non Synthetic Validation Dataset Size: ", val_nsynth_data:size())
+	opt.phase = 'train'
+	nsynth_data_loader = paths.dofile('data/data_nsynth.lua')
+	nsynth_data = nsynth_data_loader.new(opt.nThreads, opt)
+	print("Non Synthetic Dataset Size: ", nsynth_data:size())
+	opt.phase = 'val'
+	val_nsynth_data = nsynth_data_loader.new(opt.nThreads, opt)
+	print("Non Synthetic Validation Dataset Size: ", val_nsynth_data:size())
 end
 
 opt.phase = 'train'
-
-----------------------------------------------------------------------------
-
--- function for initializing model weights
-local function weights_init(m)
-	local name = torch.type(m)
-	if name:find('Convolution') then
-		m.weight:normal(0.0, 0.02)
-		m.bias:fill(0)
-	elseif name:find('BatchNormalization') then
-		if m.weight then m.weight:normal(1.0, 0.02) end
-		if m.bias then m.bias:fill(0) end
-	end
-end
 
 -- set batch/instance normalization
 set_normalization(opt.norm)
@@ -159,28 +134,6 @@ local ngf = opt.ngf
 local real_label = 1
 local fake_label = 0
 local synth_label = 1
-
--- function to load generator G
-function defineG(input_nc, output_nc, ngf)
-	local netG = nil
-	if     opt.which_model_netG == "encoder_decoder" then 
-		netG = defineG_encoder_decoder(input_nc, output_nc, ngf)
-	elseif opt.which_model_netG == "unet" then 
-		netG = defineG_unet(input_nc, output_nc, ngf)
-	elseif opt.which_model_netG == "unet_128" then 
-		netG = defineG_unet_128(input_nc, output_nc, ngf)
-	elseif opt.which_model_netG == "unet_upsample" then
-		netG = defineG_unet_upsampling(input_nc, output_nc, ngf)
-	elseif opt.which_model_netG == "resnet_512" then
-		netG = defineG_resnet_512(input_nc, output_nc, ngf)
-	elseif opt.which_model_netG == "uresnet_512" then 
-		netG = defineG_Uresnet_512(input_nc, output_nc, ngf)
-	else
-		error("unsupported netG model")
-	end
-	netG:apply(weights_init)
-	return netG
-end
 
 -- function to load discriminator D
 function defineD(input_nc, output_nc, ndf)
