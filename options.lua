@@ -99,3 +99,41 @@ function load_visualize_options()
 	errD, errG, errL1, errFeatures, errSS, errERFNet = 0, 0, 0, 0, 0, 0
 	val_errL1 = 0
 end
+
+function load_test_options()
+	local opt = {
+		DATA_ROOT = '',				-- path to images (should have subfolders 'train', 'val', etc)
+		input = '',					-- path to input image
+		mask = '',					-- path to mask input image
+		output =  '',				-- path to save output image
+		target = '',				-- path to objective image
+		mask_output = 'mask_output.png',	-- path to mask output image
+		data_aug = 0,				-- data augmentation (if set to 0 not used)
+		batchSize = 1,				-- # images in batch
+		loadSizeH = 550,			-- scale images height to this size
+		loadSizeW = 550,			-- scale images width to this size
+		fineSizeH = 512,			-- then crop to this size
+		fineSizeW = 512,			-- then crop to this size
+		display = 1,				-- display samples while testing. 0 = false
+		display_id = 200,			-- display window id.
+		gpu = 1,					-- gpu = 0 is CPU mode. gpu=X is GPU mode on GPU X
+		phase = 'test',				-- train, val, test ,etc
+		aspect_ratio = 1.0,			-- aspect ratio of result images
+		name = 'mGAN',				-- name of experiment, selects which model to run, should generally should be passed on command line
+		input_nc = 3,               -- #  of input image channels (3 if input images are loaded in RGB)
+		output_nc = 3,              -- #  of output image channels (3 if target images are loaded in RGB)
+		input_gan_nc = 1,			-- #  of input image channels to the GAN architecture (1 if gray-scale)
+		output_gan_nc = 1;			-- #  of output image channels to the GAN architecture (1 if gray-scale)
+		mask_nc = 1,				-- #  of mask channels
+		serial_batches = 1,			-- if 1, takes images in order to make batches, otherwise takes them randomly
+		serial_batch_iter = 1,		-- iter into serial image list
+		cudnn = 1,					-- set to 0 to not use cudnn (untested)
+		checkpoints_dir = './checkpoints',	-- loads models from here
+		results_dir='./results/',	-- saves results here
+		which_epoch = 'latest',		-- which epoch to test? set to 'latest' to use latest cached model
+		condition_mG = 1,
+		netSS_name = 'SemSeg/erfnet.net'
+	}
+
+	return opt
+end

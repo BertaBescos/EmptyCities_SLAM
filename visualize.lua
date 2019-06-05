@@ -7,7 +7,6 @@ function display()
 	-- display
 	
 	if opt.counter % opt.display_freq == 0 and opt.display then	
-		print('visualize')
 		createRealFake()
 		local img_input = util.scale_batch(realGray_A:float(),100,100*aspect_ratio):add(1):div(2)
 		if opt.input_gan_nc == 3 then

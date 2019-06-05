@@ -121,6 +121,30 @@ function load_models()
 	end
 end
 
+--function to load models for generator and semantic segmentation
+function load_test_models()
+	-- load all models
+	netG = util.load(paths.concat(opt.checkpoints_dir, opt.name .. '/' .. opt.which_epoch .. '_net_G' .. '.t7'), opt)
+	netG:evaluate()
+	print(netG)
+	if opt.mask == '' then
+		netSS = torch.load(paths.concat(opt.checkpoints_dir, opt.name .. '/' .. opt.which_epoch .. '_net_SS' .. '.net'))
+		netSS:evaluate()
+		netDynSS = nn.Sequential()
+		local convDyn = nn.SpatialFullConvolution(20,1,1,1,1,1)
+		convDyn.weight[{{1,12},1,1,1}] = -8/20 -- Static
+		convDyn.weight[{{13,20},1,1,1}] = 12/20 -- Dynamic
+		convDyn.bias:zero()
+		netDynSS:add(nn.SoftMax())
+		netDynSS:add(convDyn)
+		--netDynSS:add(nn.Tanh())
+		if opt.gpu > 0 then
+			netDynSS = netDynSS:cuda()
+		end
+		print(netDynSS)
+	end
+end
+
 --function to transfer networks and tensors to gpu if opt.gpu = 1
 function transfer_to_gpu()
 	if opt.gpu > 0 then

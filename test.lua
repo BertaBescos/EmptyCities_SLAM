@@ -7,47 +7,21 @@
 require 'image'
 require 'nn'
 require 'nngraph'
-util = paths.dofile('util/util.lua')
-torch.setdefaulttensortype('torch.FloatTensor')
 
-opt = {
-	DATA_ROOT = '',             -- path to images (should have subfolders 'train', 'val', etc)
-	input = '',                 -- path to input image
-	mask = '',					-- path to mask input image
-	output =  '',				-- path to save output image
-	target = '',
-	mask_output = 'mask_output.png',	-- path to mask output image
-	data_aug = 0,
-	batchSize = 1,              -- # images in batch
-	loadSizeH = 256,--550,--550,--256,             -- scale images to this size
-	loadSizeW = 768,--1100,--550,--768,
-	fineSizeH = 256,--512,--256,             --  then crop to this size
-	fineSizeW = 768,--512,--768,
-	display = 1,                -- display samples while training. 0 = false
-	display_id = 200,           -- display window id.
-	gpu = 1,                    -- gpu = 0 is CPU mode. gpu=X is GPU mode on GPU X
-	phase = 'test',              -- train, val, test ,etc
-	aspect_ratio = 1.0,         -- aspect ratio of result images
-	name = 'mGAN',              -- name of experiment, selects which model to run, should generally should be passed on command line
-	input_nc = 3,               -- #  of input image channels
-	output_nc = 3,              -- #  of output image channels
-	input_gan_nc = 1,			-- #  of GAN generator input image channels
-	output_gan_nc = 1;			-- #  of GAN generator output image channels
-	mask_nc = 1,				-- #  of mask channels
-	serial_batches = 1,         -- if 1, takes images in order to make batches, otherwise takes them randomly
-	serial_batch_iter = 1,      -- iter into serial image list
-	cudnn = 1,                  -- set to 0 to not use cudnn (untested)
-	checkpoints_dir = './checkpoints',  -- loads models from here
-	results_dir='./results/',   -- saves results here
-	which_epoch = 'latest',     -- which epoch to test? set to 'latest' to use latest cached model
-	condition_mG = 1,
-	netSS_name = 'SemSeg/erfnet.net'
-}
+util = paths.dofile('util/util.lua')
+require 'options'
+require 'models'
+
+---------------------------------------------------------------------------
+-- load testing options
+
+opt = load_test_options()
 
 -- one-line argument parser. parses enviroment variables to override the defaults
 for k,v in pairs(opt) do opt[k] = tonumber(os.getenv(k)) or os.getenv(k) or opt[k] end
 opt.nThreads = 1 -- test only works with 1 thread...
 print(opt)
+
 if opt.display == 0 then opt.display = false end
 
 opt.manualSeed = torch.random(1, 10000) -- set seed
@@ -55,15 +29,9 @@ print("Random Seed: " .. opt.manualSeed)
 torch.manualSeed(opt.manualSeed)
 torch.setdefaulttensortype('torch.FloatTensor')
 
-opt.netG_name = opt.name .. '/' .. opt.which_epoch .. '_net_G'
-local netSS_name = opt.netSS_name
+---------------------------------------------------------------------------
 
--- useful function for debugging
-function pause ()
-	print("Press any key to continue.")
-	io.flush()
-	io.read()
-end
+-- create data loader for CARLA images (test)
 
 if opt.DATA_ROOT ~= '' then
 	data_loader = paths.dofile('data/data.lua')
@@ -72,59 +40,25 @@ if opt.DATA_ROOT ~= '' then
 	print("Dataset Size: ", data:size())
 end
 
--- index different inputs
-local idx_A = nil
-local input_nc = opt.input_nc
-local output_nc = opt.output_nc
-local input_gan_nc = opt.input_gan_nc
-local output_gan_nc = opt.output_gan_nc
-idx_A = {1, input_nc}
+---------------------------------------------------------------------------
+
+--load models for generator and semantic segmentation
+load_test_models()
 
 ----------------------------------------------------------------------------
 
 local inputRGB = torch.FloatTensor(opt.batchSize, opt.input_nc, opt.fineSizeH, opt.fineSizeW)
-if opt.target ~= '' then
-	targetRGB = torch.FloatTensor(opt.batchSize, opt.output_nc, opt.fineSizeH, opt.fineSizeW)
-end
-if opt.mask ~= '' then
-	inputMask = torch.FloatTensor(opt.batchSize, opt.mask_nc, opt.fineSizeH, opt.fineSizeW)
-end
+local targetRGB = torch.FloatTensor(opt.batchSize, opt.output_nc, opt.fineSizeH, opt.fineSizeW)
+local inputMask = torch.FloatTensor(opt.batchSize, opt.mask_nc, opt.fineSizeH, opt.fineSizeW)
 
--- load all models
-print('checkpoints_dir', opt.checkpoints_dir)
-local netG = util.load(paths.concat(opt.checkpoints_dir, opt.netG_name .. '.t7'), opt)
-netG:evaluate()
-print(netG)
-if opt.mask == '' then
-	netSS = torch.load(paths.concat(opt.checkpoints_dir, netSS_name))
-	netSS:evaluate()
-	netDynSS = nn.Sequential()
-	local convDyn = nn.SpatialFullConvolution(20,1,1,1,1,1)
-	convDyn.weight[{{1,12},1,1,1}] = -8/20 -- Static
-	convDyn.weight[{{13,20},1,1,1}] = 12/20 -- Dynamic
-	convDyn.bias:zero()
-	netDynSS:add(nn.SoftMax())
-	netDynSS:add(convDyn)
-	--netDynSS:add(nn.Tanh())
-	netDynSS = netDynSS:cuda()
-	print(netDynSS)
-end
+load_test_models()
 
--- this function will be used later for the website
-function TableConcat(t1,t2)
-	for i=1,#t2 do
-		t1[#t1+1] = t2[i]
-	end
-	return t1
-end
+function loadImage(path,bin)
 
-
-local function loadImage(path,bin)
-
-	local sampleSizeH = {input_nc, opt.fineSizeH}
-	local sampleSizeW = {input_nc, opt.fineSizeW}
-	local loadSizeH   = {input_nc, opt.loadSizeH}
-	local loadSizeW   = {input_nc, opt.loadSizeW}
+	local sampleSizeH = {opt.input_nc, opt.fineSizeH}
+	local sampleSizeW = {opt.input_nc, opt.fineSizeW}
+	local loadSizeH   = {opt.input_nc, opt.loadSizeH}
+	local loadSizeW   = {opt.input_nc, opt.loadSizeW}
 	local oW = sampleSizeW[2]
 	local oH = sampleSizeH[2]
 
@@ -169,15 +103,10 @@ local function loadImage(path,bin)
 	return im
 end
 
-local gen_tm = torch.Timer()
-local ss_tm = torch.Timer()
-local dynss_tm = torch.Timer()
 local filepaths = {} -- paths to images tested on
 
 if opt.DATA_ROOT ~= '' then
-	local lGenTime = {}
-	local lSSTime = {}
-	local lDynSSTime = {}
+
 	for n=1,math.floor(data:size()/opt.batchSize) do
 		print('processing batch ' .. n)
 		
@@ -185,9 +114,9 @@ if opt.DATA_ROOT ~= '' then
 		filepaths_curr = util.basename_batch(filepaths_curr)
 		print('filepaths_curr: ', filepaths_curr)
 		
-		inputRGB = data_curr[{ {}, idx_A, {}, {} }]
+		inputRGB = data_curr[{ {}, {1, opt.input_nc}, {}, {} }]
 
-		if input_gan_nc == 1 then
+		if opt.input_gan_nc == 1 then
 			inputGray = util.rgb2gray_batch(inputRGB)
 		else
 			inputGray = inputRGB
@@ -204,19 +133,15 @@ if opt.DATA_ROOT ~= '' then
 				inputBGR = inputBGR:add(1):mul(0.5)
 				inputBGR[1][1] = inputRGB[1][3]:clone():add(1):mul(0.5)
 				inputBGR[1][3] = inputRGB[1][1]:clone():add(1):mul(0.5)
-				ss_tm:reset()
 				inputMask = netSS:forward(inputBGR)
-				table.insert(lSSTime, ss_tm:time().real)
-				dynss_tm:reset()
 				inputMask = netDynSS:forward(inputMask)
 				inputMask[inputMask:ge(0)] = 1
 				inputMask[inputMask:lt(0)] = -1
-				table.insert(lDynSSTime, dynss_tm:time().real)
 			else
 				if opt.target == '' then
-					idx_C = {input_nc + 1,input_nc + 1}
+					idx_C = {opt.input_nc + 1,opt.input_nc + 1}
 				else
-					idx_C = {input_nc + output_nc + 1,input_nc + output_nc + 1}
+					idx_C = {opt.input_nc + opt.output_nc + 1,opt.input_nc + opt.output_nc + 1}
 				end
 				inputMask = data_curr[{ {}, idx_C, {}, {} }]
 				if opt.gpu == 1 then
@@ -229,9 +154,9 @@ if opt.DATA_ROOT ~= '' then
 		end
 
 		if opt.target ~= '' then
-			idx_B = {input_nc + 1, input_nc + output_nc}
+			idx_B = {opt.input_nc + 1, opt.input_nc + opt.output_nc}
 			targetRGB = data_curr[{ {}, idx_B, {}, {} }]
-			if output_gan_nc == 1 then 
+			if opt.output_gan_nc == 1 then 
 				targetGray = util.rgb2gray_batch(targetRGB)
 				targetGray = targetGray:add(1):div(2):float()
 			else
@@ -240,23 +165,20 @@ if opt.DATA_ROOT ~= '' then
 			end
 		end
 
-		if output_gan_nc == 3 then
+		if opt.output_gan_nc == 3 then
 			output = util.deprocess_batch(netG:forward(inputGAN)):float()
 		else
-			gen_tm:reset()
 			output = netG:forward(inputGAN)
-			table.insert(lGenTime, gen_tm:time().real)
 			output = output:add(1):div(2):float()
 		end
-		if input_gan_nc == 3 then
+		if opt.input_gan_nc == 3 then
 			inputGray = util.deprocess_batch(inputGray):float()
 		else
 			inputGray = inputGray:add(1):div(2):float()
 		end
-		
 
-		paths.mkdir(paths.concat(opt.results_dir, opt.netG_name .. '_' .. opt.phase))
-		local image_dir = paths.concat(opt.results_dir, opt.netG_name .. '_' .. opt.phase, 'images')
+		paths.mkdir(paths.concat(opt.results_dir, opt.name .. '/' .. opt.which_epoch .. '_net_G' .. '_' .. opt.phase))
+		local image_dir = paths.concat(opt.results_dir, opt.name .. '/' .. opt.which_epoch .. '_net_G' .. '_' .. opt.phase, 'images')
 		paths.mkdir(image_dir)
 		paths.mkdir(paths.concat(image_dir,'input'))
 		paths.mkdir(paths.concat(image_dir,'output'))
@@ -269,8 +191,8 @@ if opt.DATA_ROOT ~= '' then
 			image.save(paths.concat(image_dir,'input',filepaths_curr[i]), image.scale(inputGray[i],inputGray[i]:size(3),inputGray[i]:size(2)/opt.aspect_ratio))
 			image.save(paths.concat(image_dir,'output',filepaths_curr[i]), image.scale(output[i],output[i]:size(3),output[i]:size(2)/opt.aspect_ratio))
 			image.save(paths.concat(image_dir,'mask',filepaths_curr[i]), image.scale(inputMask[i]:float(),inputMask[i]:size(3),inputMask[i]:size(2)/opt.aspect_ratio))
-
 		end
+
 		if opt.target ~= '' then
 			for i=1, opt.batchSize do
 				image.save(paths.concat(image_dir,'target',filepaths_curr[i]), image.scale(targetGray[i],targetGray[i]:size(3),targetGray[i]:size(2)/opt.aspect_ratio))
@@ -279,7 +201,7 @@ if opt.DATA_ROOT ~= '' then
 
 		print('Saved images to: ', image_dir)
 
-		filepaths = TableConcat(filepaths, filepaths_curr)
+		filepaths = util.tableConcat(filepaths, filepaths_curr)
 
 		if opt.display then
 			disp = require 'display'
@@ -291,15 +213,11 @@ if opt.DATA_ROOT ~= '' then
 			print('Displayed images')
 		end
 		
-		filepaths = TableConcat(filepaths, filepaths_curr)
+		filepaths = util.tableConcat(filepaths, filepaths_curr)
 	end
 
-	print("Generator Median Time: ", torch.Tensor(lGenTime):median()[1])
-	print("Semantic Segmentation Median Time: ", torch.Tensor(lSSTime):median()[1])
-	print("Dynamic Semantic Segmentation Median Time: ", torch.Tensor(lDynSSTime):median()[1])
-
 	-- make webpage
-	io.output(paths.concat(opt.results_dir,opt.netG_name .. '_' .. opt.phase, 'index.html'))
+	io.output(paths.concat(opt.results_dir,opt.opt.name .. '/' .. opt.which_epoch .. '_net_G' .. '_' .. opt.phase, 'index.html'))
 	io.write('<table style="text-align:center;">')
 	if opt.target ~= '' then
 		io.write('<tr><td>Image #</td><td>Input</td><td>Output</td><td>Ground Truth</td></tr>')
@@ -322,7 +240,6 @@ if opt.DATA_ROOT ~= '' then
 		end
 	end
 	io.write('</table>')
-	
 else
 	inputRGB = loadImage(opt.input,0)
 	if opt.mask ~= '' then
