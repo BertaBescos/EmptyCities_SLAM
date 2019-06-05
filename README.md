@@ -30,7 +30,7 @@ cd EmptyCities
 ```
 
 ### Models
-Pre-trained models can de downloaded from [this link](https://drive.google.com/open?id=1p9FTcFIlHdSSf0Ye5CkxCjyYQQ8jbsr4).
+Pre-trained models can de downloaded from [this link](https://drive.google.com/open?id=1p9FTcFIlHdSSf0Ye5CkxCjyYQQ8jbsr4). Place the `checkpoints` folder inside the project.
 
 ## Inference
 
