@@ -6,13 +6,16 @@
 require 'torch'
 require 'nn'
 require 'optim'
-util = paths.dofile('util/util.lua')
 require 'image'
-require 'models'
 require 'cudnn'
+
+util = paths.dofile('util/util.lua')
+require 'models'
 require 'criteria'
 require 'options'
-require 'visualize_save'
+require 'visualize'
+require 'save'
+
 
 ---------------------------------------------------------------------------
 -- load training options
