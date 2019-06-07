@@ -1,5 +1,5 @@
 
-# EmptyCities
+# EmptyCities for vSLAM
 
 [[Project]](https://bertabescos.github.io/EmptyCities/)   [[Paper]]()
 
@@ -30,9 +30,7 @@ cd EmptyCities
 ```
 
 ### Models
-Pre-trained models are found within the folder `/checkpoints`. You might need the GitHub package https://git-lfs.github.com/ to download them.
-- `mGAN`: generative inpainting model.
-- `SemSeg`: semantic segmentation model. The original model from [ERFNet](https://github.com/Eromera/erfnet) has been finetuned with our data.
+Pre-trained models can de downloaded from [this link](https://drive.google.com/open?id=1p9FTcFIlHdSSf0Ye5CkxCjyYQQ8jbsr4). Place the `checkpoints` folder inside the project.
 
 ## Inference
 
