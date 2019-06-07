@@ -217,7 +217,7 @@ if opt.DATA_ROOT ~= '' then
 	end
 
 	-- make webpage
-	io.output(paths.concat(opt.results_dir,opt.opt.name .. '/' .. opt.which_epoch .. '_net_G' .. '_' .. opt.phase, 'index.html'))
+	io.output(paths.concat(opt.results_dir,opt.name .. '/' .. opt.which_epoch .. '_net_G' .. '_' .. opt.phase, 'index.html'))
 	io.write('<table style="text-align:center;">')
 	if opt.target ~= '' then
 		io.write('<tr><td>Image #</td><td>Input</td><td>Output</td><td>Ground Truth</td></tr>')
