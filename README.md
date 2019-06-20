@@ -8,6 +8,7 @@ Torch implementation for learning a mapping from input images that contain dynam
 <img src="imgs/CARLA.gif" width="400px" /> <img src="imgs/CITYSCAPES.gif" width="400px" />
 
 Empty Cities: a Dynamic-Object-Invariant Space for Visual SLAM
+
 [Berta Bescos](https://bertabescos.github.io/), [Cesar Cadena](http://n.ethz.ch/~cesarc/), [Jose Neira](http://webdiis.unizar.es/~neira/)
 
 ## Setup
