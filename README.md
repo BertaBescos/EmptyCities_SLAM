@@ -49,7 +49,7 @@ DATA_ROOT=/path/to/data/ name=my_name mask=1 th test.lua
 ```bash
 DATA_ROOT=/path/to/synth/data/ name=my_name th train.lua
 ```
-- If you want to use the ORB-features-based loss you should set `lossDetector`, `lossOrientation` and `lossDescriptor` to 0 in the command line. For better adaptation to real world images it is advisable to train the model with dynamic images from a real city. These images have no groundtruth static image pair, but have groundtruth semantic segmentation. The last one is used to finetune the semantic segmentation network ERFNet for our specific goal. Real data is introduced from `epoch_synth=50` on with a probability of `pNonSynth=0.5`.
+- If you want to use the ORB-features-based loss you should set `lossDetector`, `lossOrientation` and `lossDescriptor` to 0 in the command line. 
 ```bash
 DATA_ROOT=/path/to/synth/data/ name=my_name lossDetector=1 lossOrientation=1 lossDescriptor=1 th train.lua
 ```
