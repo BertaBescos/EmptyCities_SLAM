@@ -25,7 +25,7 @@ luarocks install https://raw.githubusercontent.com/szym/display/master/display-s
 ```
 - Clone this repo:
 ```bash
-git clone git@github.com:BertaBescos/EmptyCities_SLAM.git
+git clone https://github.com/BertaBescos/EmptyCities_SLAM.git
 cd EmptyCities_SLAM
 ```
 
