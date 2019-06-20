@@ -8,7 +8,6 @@ require 'nn'
 require 'optim'
 require 'image'
 require 'cudnn'
-
 util = paths.dofile('util/util.lua')
 require 'models'
 require 'criteria'

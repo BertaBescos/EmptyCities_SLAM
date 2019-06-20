@@ -32,7 +32,7 @@ function load_train_options()
 		display_id = 10,			-- display window id.
 		display_plot = 'errERFNet, errFeatures, errL1, val_errL1',	-- which loss values to plot over time.
 		gpu = 1,					-- gpu = 0 is CPU mode. gpu=X is GPU mode on GPU X
-		name = 'mGAN',				-- name of the experiment, should generally be passed on the command line
+		name = 'base_512x512',		-- name of the experiment, should generally be passed on the command line
 		phase = 'train',			-- train, val, test, etc
 		nThreads = 2,				-- # threads for loading data
 		val_display_freq = 5000,	-- see validation output every val_display_freq iteration
@@ -47,7 +47,6 @@ function load_train_options()
 		serial_batches = 0,			-- if 1, takes images in order to make batches, otherwise takes them randomly
 		serial_batch_iter = 1,		-- iter into serial image list
 		checkpoints_dir = './checkpoints',	-- models are saved here
-		ss_dir = './checkpoints/SemSeg/erfnet.net',
 		cudnn = 1,					-- set to 0 to not use cudnn
 		condition_GAN = 1,          -- set to 0 to use unconditional discriminator
 		condition_mG = 1,			-- set to 1 to input also the mask to the generator
@@ -64,9 +63,9 @@ function load_train_options()
 		lambdaDetector = 10,		-- weight on features detector term in objective
 		lambdaOrientation = 0.1,	-- weight on features orientation term in objective
 		lambdaDescriptor = 1,		-- weight on features descriptors term in objective
-		lossDetector = 1,			-- set to 1 if features detector loss is used
-		lossOrientation = 1,		-- set to 1 if features orientation loss is used
-		lossDescriptor = 1,			-- set to 1 if features descriptors loss is used
+		lossDetector = 0,			-- set to 1 if features detector loss is used
+		lossOrientation = 0,		-- set to 1 if features orientation loss is used
+		lossDescriptor = 0,			-- set to 1 if features descriptors loss is used
 	}
 
 	return opt
@@ -119,7 +118,7 @@ function load_test_options()
 		gpu = 1,					-- gpu = 0 is CPU mode. gpu=X is GPU mode on GPU X
 		phase = 'test',				-- train, val, test ,etc
 		aspect_ratio = 1.0,			-- aspect ratio of result images
-		name = 'mGAN',				-- name of experiment, selects which model to run, should generally should be passed on command line
+		name = 'base_512x512',		-- name of experiment, selects which model to run, should generally should be passed on command line
 		input_nc = 3,               -- #  of input image channels (3 if input images are loaded in RGB)
 		output_nc = 3,              -- #  of output image channels (3 if target images are loaded in RGB)
 		input_gan_nc = 1,			-- #  of input image channels to the GAN architecture (1 if gray-scale)
@@ -132,7 +131,6 @@ function load_test_options()
 		results_dir='./results/',	-- saves results here
 		which_epoch = 'latest',		-- which epoch to test? set to 'latest' to use latest cached model
 		condition_mG = 1,
-		netSS_name = 'SemSeg/erfnet.net'
 	}
 
 	return opt
