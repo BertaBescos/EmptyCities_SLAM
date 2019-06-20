@@ -5,10 +5,12 @@
 
 Torch implementation for learning a mapping from input images that contain dynamic objects in a city environment, such as vehicles and pedestrians, to output images which are static. In the example below, the top images are fed one by one into our model. The bottom row are the obtained results:
 
+<img src="imgs/CARLA_example.gif" width="400px" />
+<img src="imgs/CITYSCAPES_example.gif" width="400px" />
 <img src="imgs/DynamicObjectsInvariantSpace.png" width="900px"/>
 
-Empty Cities: Image Inpainting for a Dynamic-Object-Invariant Space  
-[Berta Bescos](https://bertabescos.github.io/), [Jose Neira](http://webdiis.unizar.es/~neira/), [Roland Siegwart](http://www.asl.ethz.ch/the-lab/people/person-detail.html?persid=29981), [Cesar Cadena](http://n.ethz.ch/~cesarc/)  
+Empty Cities: a Dynamic-Object-Invariant Space for Visual SLAM
+[Berta Bescos](https://bertabescos.github.io/), [Cesar Cadena](http://n.ethz.ch/~cesarc/), [Jose Neira](http://webdiis.unizar.es/~neira/)
 
 ## Setup
 
@@ -25,8 +27,8 @@ luarocks install https://raw.githubusercontent.com/szym/display/master/display-s
 ```
 - Clone this repo:
 ```bash
-git clone git@github.com:BertaBescos/EmptyCities.git
-cd EmptyCities
+git clone git@github.com:BertaBescos/EmptyCities_SLAM.git
+cd EmptyCities_SLAM
 ```
 
 ### Models
