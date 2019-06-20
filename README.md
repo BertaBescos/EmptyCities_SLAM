@@ -53,9 +53,9 @@ DATA_ROOT=/path/to/synth/data/ name=my_name th train.lua
 ```bash
 DATA_ROOT=/path/to/synth/data/ name=my_name lossDetector=1 lossOrientation=1 lossDescriptor=1 th train.lua
 ```
-- If you want to use real-world data in your training, you should set `NSYNTH_DATA_ROOT` to this dataset path.
+- If you want to finetune your trained model with real-world data in your training, you should set `NSYNTH_DATA_ROOT` to this dataset path.
 ```bash
-DATA_ROOT=/path/to/synth/data/ NSYNTH_DATA_ROOT=/path/to/non/synth/data/ name=my_name th train.lua
+DATA_ROOT=/path/to/synth/data/ NSYNTH_DATA_ROOT=/path/to/non/synth/data/ continue_train=1 name=my_name th train.lua
 ```
 - (Optionally) start the display server to view results as the model trains. ( See [Display UI](#display-ui) for more details):
 ```bash
