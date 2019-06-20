@@ -1,5 +1,5 @@
 
-# EmptyCities for vSLAM
+# EmptyCities for visual SLAM
 
 [[Project]](https://bertabescos.github.io/EmptyCities/)   [[Paper]]()
 
