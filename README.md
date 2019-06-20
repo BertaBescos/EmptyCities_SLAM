@@ -38,11 +38,7 @@ Pre-trained models can de downloaded from the folder `checkpoints` in [this link
 ```bash
 DATA_ROOT=/path/to/data/ th test.lua
 ```
-For example:
-```bash
-DATA_ROOT=/imgs/ th test.lua
-```
-- If you prefer to feed the dynamic/static binary masks, you should concatenate it to the RGB image. We provide a python script for this.
+- If you prefer to feed the dynamic/static binary masks, you should concatenate it to the RGB image. We provide a python script for this on [https://github.com/bertabescos/EmptyCities](https://github.com/bertabescos/EmptyCities).
 ```bash
 DATA_ROOT=/path/to/data/ mask=1 th test.lua
 ```
@@ -57,18 +53,14 @@ DATA_ROOT=/path/to/synth/data/ th train.lua
 ```bash
 DATA_ROOT=/path/to/synth/data/ NSYTNH_DATA_ROOT=/path/to/real/data/ epoch_synth=50 pNonSynth=0.5 th train.lua
 ```
-- (CPU only) The same training command without using a GPU or CUDNN. Setting the environment variables `gpu=0 cudnn=0` forces CPU only
-```bash
-DATA_ROOT=/path/to/synth/data/ gpu=0 cudnn=0 th train.lua
-```
 - (Optionally) start the display server to view results as the model trains. ( See [Display UI](#display-ui) for more details):
 ```bash
 th -ldisplay.start 8000 0.0.0.0
 ```
 
-Models are saved by default to `./checkpoints/mGAN` (can be changed by passing `checkpoint_dir=your_dir` and `name=your_name` in train.lua).
+Models are saved by default to `./checkpoints/base_512x512` (can be changed by passing `checkpoint_dir=your_dir` and `name=your_name` in options.lua).
 
-See `opt` in train.lua for additional training options.
+See `options.lua` for additional training options.
 
 ## Datasets
 Our synthetic dataset has been generated with [CARLA 0.8.2](https://drive.google.com/file/d/1ZtVt1AqdyGxgyTm69nzuwrOYoPUn_Dsm/view) and is available in the zipped folder `CARLA_dataset` in [this link](https://drive.google.com/drive/folders/1aDO7_HtVkCncGew9ZMpDJ9KCT4fYD8hm?usp=sharing). Information on how this dataset has been generated can be found in [here](https://github.com/bertabescos/EmptyCities).
