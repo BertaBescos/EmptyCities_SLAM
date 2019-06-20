@@ -71,7 +71,7 @@ Our synthetic dataset has been generated with [CARLA 0.8.2](https://drive.google
 
 
 ## Citation
-If you use this code for your research, please cite our journal paper Empty Cities: a Dynamic-Object-Invariant Space for visual SLAM</a>:
+If you use this code for your research, please cite ours papers:
 
 ```
 @article{bescos2019empty,
