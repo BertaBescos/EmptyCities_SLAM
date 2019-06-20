@@ -30,7 +30,7 @@ cd EmptyCities_SLAM
 ```
 
 ### Models
-Pre-trained models can de downloaded from the folder `checkpoints` in [this link](https://drive.google.com/drive/folders/1aDO7_HtVkCncGew9ZMpDJ9KCT4fYD8hm?usp=sharing). Place the `checkpoints` folder inside the project.
+Pre-trained models can de downloaded from the folder `checkpoints` in [this link](https://drive.google.com/drive/folders/1aDO7_HtVkCncGew9ZMpDJ9KCT4fYD8hm?usp=sharing). You will find a README.md file inside this folder. Place the `checkpoints` folder inside the project. 
 
 ## Test
 
@@ -46,12 +46,6 @@ DATA_ROOT=/imgs/ th test.lua
 ```bash
 DATA_ROOT=/path/to/data/ mask=1 th test.lua
 ```
-- Finally, if the groundtruth images are available you should concatenate them too (RGB | GT | Mask).
-```bash
-DATA_ROOT=/path/to/data/ mask=1 target=1 th test.lua
-```
-The test results will be saved to an html file here: `./results/mGAN/latest_net_G_val/index.html`.
-
 
 ## Train
 
