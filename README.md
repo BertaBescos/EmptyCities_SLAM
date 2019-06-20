@@ -30,35 +30,11 @@ cd EmptyCities_SLAM
 ```
 
 ### Models
-Pre-trained models can de downloaded from [this link](https://drive.google.com/open?id=1p9FTcFIlHdSSf0Ye5CkxCjyYQQ8jbsr4). Place the `checkpoints` folder inside the project.
-
-## Inference
-
-- You can fastly test our model with one image.
-```bash
-input=/path/to/input/image/ qlua test.lua
-```
-We provide some images in `/imgs/test` you can run our model on. For example:
-```bash
-input=imgs/test/0.png qlua test.lua
-```
-These images are from the [Cityscapes](https://www.cityscapes-dataset.com/) and the [SVS](https://svsdataset.github.io/) datasets.
-- You can also store the inpainted result and the binary mask that has been used.
-```bash
-input=/path/to/input/image/ output=/path/to/output/image/ th test.lua
-```
-In the following example the binary mask is stored in `/imgs/test/0_output_mask.png`:
-```bash
-input=imgs/test/0.png output=imgs/test/0_output.png th test.lua
-```
-- If the stored mask is not accurate enough, you can provide yourself a better one:
-```bash
-input=imgs/test/0.png mask=imgs/test/0_mask.png output=imgs/test/0_output.png th test.lua
-```
+Pre-trained models can de downloaded from the folder `checkpoints` in [this link](https://drive.google.com/file/d/1Va03vxrtI2W671ERxjPPows1uzRKGNKF/view?usp=sharing). Place the `checkpoints` folder inside the project.
 
 ## Test
 
-- If you want to work with more than one image, we encourage you to keep your data in a folder of your choice `/path/to/data/` with three subfolders `train`, `test` and `val`. The following command will run our model within all the images inside the folder `test` and keep the results in `./results/mGAN`. Images within the folder `test` should be RGB images of any size.
+- We encourage you to keep your data in a folder of your choice `/path/to/data/` with three subfolders `train`, `test` and `val`. The following command will run our model within all the images inside the folder `test` and keep the results in `./results/mGAN`. Images within the folder `test` should be RGB images of any size.
 ```bash
 DATA_ROOT=/path/to/data/ th test.lua
 ```
