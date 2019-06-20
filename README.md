@@ -1,8 +1,6 @@
 
 # EmptyCities for visual SLAM
 
-[[Project]](https://bertabescos.github.io/EmptyCities/)   [[Paper]]()
-
 Torch implementation for learning a mapping from input images that contain dynamic objects in a city environment, such as vehicles and pedestrians, to output images which are static and suitable for localization and mapping. 
 
 <img src="imgs/CARLA.gif" width="400px" />       <img src="imgs/CITYSCAPES.gif" width="400px" />
