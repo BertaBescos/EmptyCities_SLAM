@@ -30,7 +30,7 @@ cd EmptyCities_SLAM
 ```
 
 ### Models
-Pre-trained models can de downloaded from the folder `checkpoints` in [this link](https://drive.google.com/file/d/1Va03vxrtI2W671ERxjPPows1uzRKGNKF/view?usp=sharing). Place the `checkpoints` folder inside the project.
+Pre-trained models can de downloaded from the folder `checkpoints` in [this link](https://drive.google.com/drive/folders/1aDO7_HtVkCncGew9ZMpDJ9KCT4fYD8hm?usp=sharing). Place the `checkpoints` folder inside the project.
 
 ## Test
 
