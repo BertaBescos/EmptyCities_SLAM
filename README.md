@@ -132,12 +132,19 @@ If you use this code for your research, please cite our paper Empty Cities: Imag
 @article{bescos2018empty,
   title={Empty Cities: Image Inpainting for a Dynamic-Object-Invariant Space},
   author={Bescos, Berta and Neira, José and Siegwart, Roland and Cadena, Cesar},
-  journal={arXiv},
+  journal={International Conference on Robotics and Automation (ICRA)},
   year={2018}
+}
+
+@article{bescos2019empty,
+  title={Empty Cities: a Dynamic-Object-Invariant Space for Visual SLAM},
+  author={Bescos, Berta  and Cadena, Cesar and Neira, José},
+  journal={arXiv},
+  year={2019}
 }
 ```
 
 ## Acknowledgments
 Our code is heavily inspired by [pix2pix](https://github.com/phillipi/pix2pix), [DCGAN](https://github.com/soumith/dcgan.torch) and [Context-Encoder](https://github.com/pathak22/context-encoder).
 
-# EmptyCities
+# EmptyCities for visual SLAM
