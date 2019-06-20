@@ -34,13 +34,13 @@ Pre-trained models can de downloaded from the folder `checkpoints` in [this link
 
 ## Test
 
-- We encourage you to keep your data in a folder of your choice `/path/to/data/` with three subfolders `train`, `test` and `val`. The following command will run our model within all the images inside the folder `test` and keep the results in `./results/mGAN`. Images within the folder `test` should be RGB images of any size.
+- We encourage you to keep your data in a folder of your choice `/path/to/data/` with three subfolders `train`, `test` and `val`. The following command will run our model within all the images inside the folder `test` and keep the results in `./results/`. Images within the folder `test` should be RGB images of any size.
 ```bash
-DATA_ROOT=/path/to/data/ th test.lua
+DATA_ROOT=/path/to/data/ name=my_name th test.lua
 ```
 - If you prefer to feed the dynamic/static binary masks, you should concatenate it to the RGB image. We provide a python script for this on [https://github.com/bertabescos/EmptyCities](https://github.com/bertabescos/EmptyCities).
 ```bash
-DATA_ROOT=/path/to/data/ mask=1 th test.lua
+DATA_ROOT=/path/to/data/ name=my_name mask=1 th test.lua
 ```
 
 ## Train
