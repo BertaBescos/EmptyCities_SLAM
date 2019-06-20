@@ -126,7 +126,16 @@ Then open `http://(hostname):(port)/` in your browser to load the remote desktop
 L1 error is plotted to the display by default. Set the environment variable `display_plot` to a comma-seperated list of values `errL1`, `errG` and `errD` to visualize the L1, generator, and descriminator error respectively. For example, to plot only the generator and descriminator errors to the display instead of the default L1 error, set `display_plot="errG,errD"`.
 
 ## Citation
-If you use this code for your research, please cite our paper Empty Cities: Image Inpainting for a Dynamic Objects Invariant Space</a>:
+If you use this code for your research, please cite our journal paper Empty Cities: a Dynamic-Object-Invariant Space for visual SLAM</a>:
+
+```
+@article{bescos2019empty,
+  title={Empty Cities: a Dynamic-Object-Invariant Space for Visual SLAM},
+  author={Bescos, Berta  and Cadena, Cesar and Neira, José},
+  journal={arXiv},
+  year={2019}
+}
+```
 
 ```
 @article{bescos2018empty,
@@ -135,14 +144,8 @@ If you use this code for your research, please cite our paper Empty Cities: Imag
   journal={International Conference on Robotics and Automation (ICRA)},
   year={2018}
 }
-
-@article{bescos2019empty,
-  title={Empty Cities: a Dynamic-Object-Invariant Space for Visual SLAM},
-  author={Bescos, Berta  and Cadena, Cesar and Neira, José},
-  journal={arXiv},
-  year={2019}
-}
 ```
+
 
 ## Acknowledgments
 Our code is heavily inspired by [pix2pix](https://github.com/phillipi/pix2pix), [DCGAN](https://github.com/soumith/dcgan.torch) and [Context-Encoder](https://github.com/pathak22/context-encoder).
