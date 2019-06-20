@@ -45,13 +45,17 @@ DATA_ROOT=/path/to/data/ mask=1 th test.lua
 
 ## Train
 
-- The simplest case trains only with synthetic CARLA data. In the subfolder `/path/to/synth/data/train/` there should be the concatenated (RGB | GT | Mask) images. The utilized masks come from this simulator too, and therefore do not use the semantic segmentation model.
+- The simplest case trains only with synthetic CARLA data with G(x,m) and D(x,y,m,n). In the subfolder `/path/to/synth/data/train/` there should be the concatenated (RGB | GT | Mask) images. The utilized masks come from this simulator too, and therefore do not use the semantic segmentation model.
 ```bash
-DATA_ROOT=/path/to/synth/data/ th train.lua
+DATA_ROOT=/path/to/synth/data/ name=my_name th train.lua
 ```
-- For better adaptation to real world images it is advisable to train the model with dynamic images from a real city. These images have no groundtruth static image pair, but have groundtruth semantic segmentation. The last one is used to finetune the semantic segmentation network ERFNet for our specific goal. Real data is introduced from `epoch_synth=50` on with a probability of `pNonSynth=0.5`.
+- If you want to use the ORB-features-based loss you should set `lossDetector`, `lossOrientation` and `lossDescriptor` to 0 in the command line. For better adaptation to real world images it is advisable to train the model with dynamic images from a real city. These images have no groundtruth static image pair, but have groundtruth semantic segmentation. The last one is used to finetune the semantic segmentation network ERFNet for our specific goal. Real data is introduced from `epoch_synth=50` on with a probability of `pNonSynth=0.5`.
 ```bash
-DATA_ROOT=/path/to/synth/data/ NSYTNH_DATA_ROOT=/path/to/real/data/ epoch_synth=50 pNonSynth=0.5 th train.lua
+DATA_ROOT=/path/to/synth/data/ name=my_name lossDetector=1 lossOrientation=1 lossDescriptor=1 th train.lua
+```
+- If you want to use real-world data in your training, you should set `NSYNTH_DATA_ROOT` to this dataset path.
+```bash
+DATA_ROOT=/path/to/synth/data/ NSYNTH_DATA_ROOT=/path/to/non/synth/data/ name=my_name th train.lua
 ```
 - (Optionally) start the display server to view results as the model trains. ( See [Display UI](#display-ui) for more details):
 ```bash
