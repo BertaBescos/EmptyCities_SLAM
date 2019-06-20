@@ -5,8 +5,8 @@
 
 Torch implementation for learning a mapping from input images that contain dynamic objects in a city environment, such as vehicles and pedestrians, to output images which are static. In the example below, the top images are fed one by one into our model. The bottom row are the obtained results:
 
-<img src="imgs/CARLA_example.gif" width="400px" />
-<img src="imgs/CITYSCAPES_example.gif" width="400px" />
+<img src="imgs/CARLA.gif" width="400px" />
+<img src="imgs/CITYSCAPES.gif" width="400px" />
 <img src="imgs/DynamicObjectsInvariantSpace.png" width="900px"/>
 
 Empty Cities: a Dynamic-Object-Invariant Space for Visual SLAM
